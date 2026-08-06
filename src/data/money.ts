@@ -1,0 +1,67 @@
+/**
+ * Money is integer cents, always — spec §4.3. No REAL, ever.
+ *
+ * These helpers exist so that the *only* place a decimal string becomes a
+ * number is here, where the rounding is deliberate and tested. Anywhere else,
+ * `0.1 + 0.2` style drift would accumulate straight into the §5.5 sum checks.
+ */
+
+/**
+ * Parses user- or receipt-supplied text into cents.
+ *
+ * Accepts `"12.34"`, `"$12.34"`, `"12"`, `"1,234.50"`, `"-4.20"` and pads a
+ * single trailing decimal (`"12.3"` → 1230). Returns null for anything it
+ * cannot read confidently — the caller decides whether that is an error or an
+ * illegible price (which is NULL in the schema, not zero).
+ */
+export function parseCents(input: string): number | null {
+  const cleaned = input.trim().replace(/[$\s,]/g, '');
+  if (cleaned === '' || cleaned === '-') return null;
+
+  const match = /^(-?)(\d*)(?:\.(\d{1,2}))?$/.exec(cleaned);
+  if (!match) return null;
+
+  const [, sign, whole, fraction = ''] = match;
+  if (whole === '' && fraction === '') return null;
+
+  const cents = Number(whole || '0') * 100 + Number(fraction.padEnd(2, '0'));
+  if (!Number.isSafeInteger(cents)) return null;
+  return sign === '-' ? -cents : cents;
+}
+
+/** Renders cents as a bare decimal string for text inputs: 1234 → `"12.34"`. */
+export function centsToInput(cents: number | null | undefined): string {
+  if (cents == null) return '';
+  const sign = cents < 0 ? '-' : '';
+  const absolute = Math.abs(cents);
+  return `${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, '0')}`;
+}
+
+/**
+ * Formats cents for display in the device locale (§7).
+ *
+ * `Intl.NumberFormat` is available in Hermes, and currency formatting is one
+ * of the things it genuinely gets right per-locale — hand-rolling `$` prefixes
+ * would be wrong the moment the device is set to anything but en-NZ.
+ */
+export function formatMoney(
+  cents: number | null | undefined,
+  currency = 'NZD',
+  options: { showPlaceholder?: boolean } = {}
+): string {
+  if (cents == null) return options.showPlaceholder === false ? '' : '—';
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).format(cents / 100);
+}
+
+/**
+ * Quantities are REAL because weighed goods genuinely are (§4.3), so they are
+ * displayed with just enough precision to be honest and no more.
+ */
+export function formatQuantity(qty: number): string {
+  if (Number.isInteger(qty)) return String(qty);
+  return String(Number(qty.toFixed(3)));
+}

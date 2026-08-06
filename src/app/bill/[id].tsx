@@ -1,0 +1,252 @@
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
+
+import { formatDate } from '@/data/dates';
+import { getDb } from '@/data/db';
+import { deleteBill, getBill } from '@/data/ledgerRepo';
+import { formatMoney, formatQuantity } from '@/data/money';
+import type { BillItem, BillWithItems } from '@/types/ledger';
+import { CATEGORY_LABELS, UNIT_LABELS } from '@/types/vocabulary';
+import { Button } from '@/ui/components/button';
+import { EmptyState } from '@/ui/components/empty-state';
+import { FlagBanner } from '@/ui/components/flag-banner';
+import { Screen } from '@/ui/components/screen';
+import { ThemedText } from '@/ui/components/themed-text';
+import { useTheme } from '@/ui/hooks/use-theme';
+import { useLedgerStore } from '@/ui/stores/ledger-store';
+import { Radius, Spacing } from '@/ui/theme';
+
+export default function BillDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const billId = Number(id);
+  const theme = useTheme();
+  const refresh = useLedgerStore((state) => state.refresh);
+
+  const [bill, setBill] = useState<BillWithItems | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        const db = await getDb();
+        const loaded = await getBill(db, billId);
+        if (!cancelled) {
+          setBill(loaded);
+          setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [billId])
+  );
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete this bill?',
+      'The bill and its items will be removed. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const db = await getDb();
+            await deleteBill(db, billId);
+            await refresh();
+            router.dismissTo('/');
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <Screen>
+        <View style={styles.centered}>
+          <ActivityIndicator />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!bill) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Bill not found"
+          message="It may have been deleted."
+          actionLabel="Back to ledger"
+          onAction={() => router.dismissTo('/')}
+        />
+      </Screen>
+    );
+  }
+
+  const itemsTotal = bill.items.reduce((sum, item) => sum + (item.priceCents ?? 0), 0);
+
+  return (
+    <Screen edges={['left', 'right', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.summary}>
+          <ThemedText type="title">{bill.merchant ?? 'Unnamed merchant'}</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            {formatDate(bill.purchasedAt)}
+            {bill.purchasedTime ? ` at ${bill.purchasedTime}` : ''}
+          </ThemedText>
+          <ThemedText type="amountLarge">{formatMoney(bill.totalCents, bill.currency)}</ThemedText>
+        </View>
+
+        <FlagBanner flags={bill.parseFlags} />
+
+        {bill.merchantAddress && (
+          <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Store address
+            </ThemedText>
+            <ThemedText>{bill.merchantAddress}</ThemedText>
+            <Button
+              label="Navigate here"
+              variant="secondary"
+              onPress={() => openMaps(bill.merchantAddress!)}
+              accessibilityHint="Opens the address in your maps app"
+            />
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <ThemedText type="subtitle">Items</ThemedText>
+          {bill.items.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {formatMoney(itemsTotal, bill.currency)} across {bill.items.length}
+            </ThemedText>
+          )}
+        </View>
+
+        {bill.items.length === 0 ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            This bill has no itemised lines — the total is recorded on its own. That is the expected
+            shape for a restaurant bill or a service invoice.
+          </ThemedText>
+        ) : (
+          bill.items.map((item) => <ItemRow key={item.id} item={item} currency={bill.currency} />)
+        )}
+
+        {bill.discountCents > 0 && (
+          <View style={styles.discountRow}>
+            <ThemedText themeColor="textSecondary">Discount</ThemedText>
+            <ThemedText type="amount" themeColor="textSecondary">
+              −{formatMoney(bill.discountCents, bill.currency)}
+            </ThemedText>
+          </View>
+        )}
+
+        <View style={styles.meta}>
+          <MetaRow label="Source" value={bill.source} />
+          {bill.capturePath && <MetaRow label="Captured via" value={bill.capturePath} />}
+          {bill.unitsSold != null && <MetaRow label="Units sold" value={String(bill.unitsSold)} />}
+        </View>
+
+        <View style={styles.actions}>
+          <Button
+            label="Edit"
+            variant="secondary"
+            onPress={() => router.push(`/bill/edit/${bill.id}`)}
+            style={styles.flex}
+          />
+          <Button label="Delete" variant="danger" onPress={confirmDelete} style={styles.flex} />
+        </View>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
+  const theme = useTheme();
+  const quantity = `${formatQuantity(item.qty)} ${UNIT_LABELS[item.unit]}`;
+  const rate =
+    item.unitPriceCents != null
+      ? ` at ${formatMoney(item.unitPriceCents, currency)}/${UNIT_LABELS[item.unit]}`
+      : '';
+
+  return (
+    <View
+      style={[styles.item, { borderColor: theme.border }]}
+      accessibilityLabel={`${item.name}, ${quantity}, ${formatMoney(item.priceCents, currency)}`}>
+      <View style={styles.itemMain}>
+        <ThemedText numberOfLines={2}>{item.name}</ThemedText>
+        {item.nameLocal && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {item.nameLocal}
+          </ThemedText>
+        )}
+        <ThemedText type="small" themeColor="textSecondary">
+          {CATEGORY_LABELS[item.category]} · {quantity}
+          {rate}
+        </ThemedText>
+      </View>
+      <View style={styles.itemTrailing}>
+        <ThemedText type="amount">{formatMoney(item.priceCents, currency)}</ThemedText>
+        {item.priceCents == null && (
+          <ThemedText type="small" themeColor="warning">
+            Illegible
+          </ThemedText>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function MetaRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metaRow}>
+      <ThemedText type="small" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+      <ThemedText type="small">{value}</ThemedText>
+    </View>
+  );
+}
+
+/**
+ * Hands the address to the OS as printed (§4.14) — no geocoding, no API key.
+ * The platform's own search handles abbreviation and misspelling better than a
+ * parse-time lookup would, and it costs nothing.
+ */
+function openMaps(address: string) {
+  const query = encodeURIComponent(address);
+  const url = Platform.select({
+    ios: `http://maps.apple.com/?q=${query}`,
+    default: `geo:0,0?q=${query}`,
+  });
+  void Linking.openURL(url);
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  content: { padding: Spacing.four, gap: Spacing.four, paddingBottom: Spacing.seven },
+  summary: { gap: Spacing.one },
+  card: { borderRadius: Radius.medium, padding: Spacing.four, gap: Spacing.two },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: Spacing.two,
+  },
+  item: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingVertical: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  itemMain: { flex: 1, gap: Spacing.half },
+  itemTrailing: { alignItems: 'flex-end', gap: Spacing.half },
+  discountRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  meta: { gap: Spacing.one, marginTop: Spacing.two },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  actions: { flexDirection: 'row', gap: Spacing.three, marginTop: Spacing.four },
+});

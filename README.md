@@ -1,56 +1,160 @@
-# Welcome to your Expo app 👋
+# YourIntelliLedger — mobile app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Receipt-driven personal ledger for Android and iOS, built from one codebase.
+The authoritative design document is
+[`YourIntelliLedger-Mobile-Dev-Spec.md`](./YourIntelliLedger-Mobile-Dev-Spec.md);
+section references throughout the code (`§4.4`, `§5.1`, …) point into it.
 
-## Get started
+## Requirements
 
-1. Install dependencies
+| Tool | Version | Why it matters |
+|---|---|---|
+| Node | 20+ | — |
+| **JDK** | **17** (Temurin or equivalent) | **Not whatever is newest.** JDK 26 fails the current AGP's `jlink`/`androidJdkImage` step outright, and takes `react-native-svg` and `react-native-masked-view` down with it — a failure that reads like a New Architecture problem but isn't (spec §1.1, §12 item 1). |
+| Xcode | latest | iOS builds only |
 
-   ```bash
-   npm install
-   ```
+`npm run android` pins `JAVA_HOME` to JDK 17 automatically via
+[`scripts/with-jdk17.js`](./scripts/with-jdk17.js), so the pin survives
+`expo prebuild` regenerating `android/`. Use the same script in CI.
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+This is an Expo **development build** — native modules mean Expo Go cannot run
+it.
 
 ```bash
-npm run reset-project
+npm install
+npm run android      # or: npm run ios
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Scripts
 
-### Other setup steps
+| Command | Does |
+|---|---|
+| `npm start` | Metro dev server |
+| `npm run android` / `npm run ios` | Build and install a development build |
+| `npm run prebuild` | Regenerate `ios/` and `android/` from `app.config.ts` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm test` | Jest, both projects |
+| `npm run check:gradle` | Fail if the Gradle wrapper has drifted (runs automatically before `npm run android`) |
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Android Studio
 
-## Learn more
+**The command line is the supported build path** — `npm run android` builds,
+installs, sets up the `adb reverse` tunnel, starts Metro, and pins JDK 17, in
+one step. Android Studio earns its keep for logcat, the emulator manager, the
+layout inspector and native debugging. Using it as the *build* driver costs you
+three separate landmines, all of which have bitten this project:
 
-To learn more about developing your project with Expo, look at the following resources:
+**1. `Exec failed, error: 2 (No such file or directory)` — this is `node`, not
+your project.** The generated Gradle files and Expo's autolinking plugin shell
+out to `node` via `Runtime.exec`, which bypasses the shell and resolves only
+against the inherited PATH. A Dock-launched Android Studio gets the bare
+launchd PATH (`launchctl getenv PATH` is unset on this machine, so
+`/usr/bin:/bin:/usr/sbin:/sbin`), which has no Homebrew. Verified: identical
+folder, identical JDK — fails without `/opt/homebrew/bin` on PATH, builds with
+it.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+A config plugin *cannot* fix this. Patching the generated files covers 7 of 9
+call sites; `expo-autolinking-settings` hardcodes `"node"` in Kotlin with no
+property or environment override. Two fixes actually work:
 
-## Join the community
+```bash
+# Per launch — inherits your shell PATH:
+"/Applications/Android Studio.app/Contents/MacOS/studio" &
 
-Join our community of developers creating universal apps.
+# Permanent, all GUI apps (needs a reboot):
+sudo launchctl config user path /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**2. Android Studio upgrades the Gradle wrapper behind your back.** It bumped
+9.3.1 → 9.6.1 twice here (31 Jul and 3 Aug). Under 9.6.1 the Kotlin compiler
+fails on React Native's own Gradle plugin and reports only "Internal compiler
+error", minutes into the build. **Decline the "Upgrade Gradle" prompt.**
+`npm run check:gradle` catches the drift in about a second; it reads the
+expected version from `@react-native/gradle-plugin`, so a React Native upgrade
+moves the expectation automatically.
+
+**3. The Gradle JDK is a separate setting.** `scripts/with-jdk17.js` only pins
+`JAVA_HOME` for `npm run android`. Studio uses `.idea/gradle.xml`, which lives
+inside the generated tree and is wiped by prebuild — so
+`scripts/pin-android-studio-jdk.js` rewrites it as a `postprebuild` hook.
+
+Finally: **a debug build has no bundled JS.** It fetches it from Metro at
+launch, so with no Metro running the app sits on the splash screen forever with
+no error. Android Studio does not start Metro and does not create the tunnel.
+After every replug:
+
+```bash
+adb reverse tcp:8081 tcp:8081
+```
+
+For an APK that runs with no laptop attached, `cd android && ./gradlew
+assembleRelease` embeds the bundle.
+
+## Layout
+
+```
+src/
+  app/            expo-router screens — shared, no platform forks
+  data/           db, migrations, repositories, money/date helpers   100% shared
+  agent/          loop, hubClient, prompt, tools, validate, compile  (Weeks 7–8)
+  fastpath/       regex + date parsing                               (Week 8)
+  render/         envelope → text / table / chart                    (Week 8)
+  capture/        scanner, camera, OCR, geometry, line reconstruction (Weeks 5–6)
+  ui/             components, theme, stores
+  types/          closed vocabularies, ledger types
+  platform/       the ONLY place platform forks are permitted
+```
+
+`ios/` and `android/` are **generated** by `expo prebuild` and are not
+committed — all native configuration lives in `app.config.ts` (spec §2.3).
+
+Two rules worth repeating because they are cheap to break:
+
+1. Screens never import `db.ts` or a driver — only repositories (§2.2 rule 1).
+2. No `Platform.OS` branching outside `src/platform/`, except trivial cosmetics
+   via an inline `Platform.select()` (§2.2 rule 3).
+
+**Android and iOS only.** There is no web target: a third render target would
+legitimise the `.web.tsx` forks that rule 3 exists to prevent.
+
+## Testing
+
+Two Jest projects (see [`jest.config.js`](./jest.config.js)):
+
+- **`node`** — the data layer and pure logic. `expo-sqlite` cannot run in Node,
+  so `src/data/driver.ts` defines a narrow `SqlDriver` interface that
+  `expo-sqlite` implements in the app and `better-sqlite3` implements under
+  test. That is what makes §10's "Jest + in-memory SQLite" integration tests —
+  real transactions, real rollbacks, real `CHECK` constraints — possible at
+  all.
+- **`ui`** — component tests via `@testing-library/react-native`. Note that
+  `render` and `fireEvent` are **async** in v14 (React 19's act boundary);
+  a missing `await` fails with the misleading "`render` function has not been
+  called".
+
+```bash
+npm test            # both projects, as two separate Jest invocations
+npm run test:node   # just the data layer
+npm run test:ui     # just the components
+```
+
+**`npm test` runs the two projects as separate invocations on purpose.** Jest
+reuses worker processes across projects, and the React Native preset's global
+setup leaks into `node` test files that land on a worker after it. About one
+run in four, `await expect(...).rejects.toThrow()` reported "Received function
+did not throw" for SQLite errors that *were* thrown — so the schema's CHECK and
+foreign-key tests failed at random and looked for all the world like the
+constraints were missing from migration 001. `--runInBand` reproduces it too;
+separate invocations never do. If you go back to a single `jest` run, expect
+that ghost to return.
+
+Per §10, a feature is not done until its E2E flow passes on **both**
+platforms, verified on one physical Android device and one physical iPhone.
+
+## Status
+
+Week 3 of the plan in §11 is complete: schema and migrations, repositories with
+the §4.11 integrity checks, manual bill entry, and the ledger
+list/detail/edit/delete flow. Capture (§5), the agent (§6) and Insights are
+stubbed routes.
