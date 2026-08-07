@@ -58,6 +58,35 @@ export function formatMoney(
 }
 
 /**
+ * Short form for chart axes, where a full currency string will not fit:
+ * 1234500 → `"$12.3k"`.
+ *
+ * Hand-rolled rather than `Intl`'s `notation: 'compact'`, which Hermes does not
+ * reliably implement — a silent fallback to long form would overflow the axis
+ * gutter on a narrow screen.
+ */
+export function formatMoneyCompact(cents: number, currency = 'NZD'): string {
+  const symbol = currencySymbol(currency);
+  const dollars = Math.round(cents / 100);
+  const sign = dollars < 0 ? '-' : '';
+  const magnitude = Math.abs(dollars);
+
+  if (magnitude >= 1_000_000) return `${sign}${symbol}${(magnitude / 1_000_000).toFixed(1)}m`;
+  if (magnitude >= 1_000) return `${sign}${symbol}${(magnitude / 1_000).toFixed(1)}k`;
+  return `${sign}${symbol}${magnitude}`;
+}
+
+/** The locale's symbol for a currency, e.g. `'NZD'` → `'$'`. */
+export function currencySymbol(currency = 'NZD'): string {
+  const parts = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency,
+    currencyDisplay: 'narrowSymbol',
+  }).formatToParts(0);
+  return parts.find((part) => part.type === 'currency')?.value ?? '$';
+}
+
+/**
  * Quantities are REAL because weighed goods genuinely are (§4.3), so they are
  * displayed with just enough precision to be honest and no more.
  */

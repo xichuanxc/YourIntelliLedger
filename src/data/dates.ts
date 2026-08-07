@@ -73,3 +73,57 @@ export function formatDate(
 export function formatMonth(month: string): string {
   return formatDate(`${month}-01`, { month: 'long', year: 'numeric' });
 }
+
+/** `'2026-07'` → `'Jul'`, for chart axis labels where space is tight. */
+export function formatMonthShort(month: string): string {
+  return formatDate(`${month}-01`, { month: 'short' });
+}
+
+// ------------------------------------------------------- periods (Week 4) ---
+
+/** An inclusive range of local calendar dates. */
+export interface Period {
+  from: LocalDate;
+  to: LocalDate;
+}
+
+export function startOfMonth(month: string): LocalDate {
+  return `${month}-01`;
+}
+
+export function endOfMonth(month: string): LocalDate {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return `${month}-${String(daysInMonth(year, monthNumber)).padStart(2, '0')}`;
+}
+
+/**
+ * Shifts a `'YYYY-MM'` key by whole months.
+ *
+ * Done with integer arithmetic rather than `Date`, because a month key is a
+ * calendar label, not an instant — and `new Date('2026-03-31')` minus a month
+ * is the kind of expression that produces 3 March.
+ */
+export function addMonths(month: string, delta: number): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const zeroBased = year * 12 + (monthNumber - 1) + delta;
+  const newYear = Math.floor(zeroBased / 12);
+  const newMonth = (zeroBased % 12) + 1;
+  return `${String(newYear).padStart(4, '0')}-${String(newMonth).padStart(2, '0')}`;
+}
+
+/** The `count` months ending at `endMonth`, oldest first. */
+export function monthSequence(endMonth: string, count: number): string[] {
+  return Array.from({ length: count }, (_, index) => addMonths(endMonth, index - (count - 1)));
+}
+
+/**
+ * The period covering `count` whole months up to and including the month of
+ * `endDate` — "last 3 months" means three calendar months, not 90 days.
+ */
+export function periodOfLastMonths(count: number, endDate: LocalDate = todayLocalDate()): Period {
+  const endMonthKey = monthOf(endDate);
+  return {
+    from: startOfMonth(addMonths(endMonthKey, -(count - 1))),
+    to: endOfMonth(endMonthKey),
+  };
+}
