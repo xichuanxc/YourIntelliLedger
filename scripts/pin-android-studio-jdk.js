@@ -82,8 +82,17 @@ if (!fs.existsSync(gradleXml)) {
 
 let xml = fs.readFileSync(gradleXml, 'utf8');
 
-if (xml.includes('name="gradleJvm"')) {
-  xml = xml.replace(/<option name="gradleJvm" value="[^"]*" \/>/, option);
+const existing = /<option name="gradleJvm" value="([^"]*)" \/>/.exec(xml);
+if (existing) {
+  // Fill in a missing value; never overwrite a deliberate one. Android Studio
+  // writes its own choice here (e.g. its bundled `jbr-21`) when you pick a JDK
+  // in Settings, and silently reverting that on the next prebuild would be a
+  // surprising way to lose a decision.
+  console.log(
+    `[pin-android-studio-jdk] Gradle JDK already set to "${existing[1]}" — left alone. ` +
+      `Delete the gradleJvm line and re-run to reset it to JDK ${REQUIRED_MAJOR}.`
+  );
+  process.exit(0);
 } else if (xml.includes('<GradleProjectSettings>')) {
   xml = xml.replace('<GradleProjectSettings>', `<GradleProjectSettings>\n        ${option}`);
 } else {

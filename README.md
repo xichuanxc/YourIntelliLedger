@@ -77,7 +77,16 @@ moves the expectation automatically.
 **3. The Gradle JDK is a separate setting.** `scripts/with-jdk17.js` only pins
 `JAVA_HOME` for `npm run android`. Studio uses `.idea/gradle.xml`, which lives
 inside the generated tree and is wiped by prebuild — so
-`scripts/pin-android-studio-jdk.js` rewrites it as a `postprebuild` hook.
+`scripts/pin-android-studio-jdk.js` restores it as a `postprebuild` hook. It
+**fills in a missing value and never overwrites an existing one**, so a JDK you
+chose in Studio's Settings survives a regenerate.
+
+Studio currently resolves `#GRADLE_LOCAL_JAVA_HOME` to its own bundled JBR 21,
+while the CLI uses Temurin 17. Both build. The only thing that must never be
+used is the machine default (Corretto 26), which fails AGP's `jlink` step. The
+cost of the split is that Gradle runs **one daemon per JVM**, so alternating
+between Studio and the CLI can trigger a full recompile and doubles daemon
+memory. `./android/gradlew --status` lists them.
 
 Finally: **a debug build has no bundled JS.** It fetches it from Metro at
 launch, so with no Metro running the app sits on the splash screen forever with
