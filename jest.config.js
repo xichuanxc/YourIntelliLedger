@@ -33,6 +33,10 @@
  */
 const shared = {
   moduleNameMapper: {
+    // Must precede the general rule: Jest tries these in order, and `^@/(.*)$`
+    // would otherwise resolve `@/assets/…` to `src/assets/…`. tsconfig carries
+    // the same pair of paths, so the two must be kept in step.
+    '^@/assets/(.*)$': '<rootDir>/assets/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
 };

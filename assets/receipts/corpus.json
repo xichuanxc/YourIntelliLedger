@@ -1,0 +1,781 @@
+{
+  "schema_version": 1,
+  "exported_at": "2026-08-07T22:42:11.348Z",
+  "source": "PyPrototype gemini-image parses",
+  "bills": [
+    {
+      "slug": "chemist_warehouse_20260620",
+      "merchant": "Chemist Warehouse",
+      "merchantAddress": "Shop 50 and 65 Centre Place 501 Victoria Street Hamilton Central HAMILTON",
+      "purchasedAt": "2025-06-20",
+      "purchasedTime": "14:19",
+      "totalCents": 3547,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 4,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Grin Floss W/Smth 80PK",
+          "nameLocal": null,
+          "category": "household",
+          "isFood": false,
+          "qty": 80,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 549,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Flixonase A/H Nasal 24Hr 120",
+          "nameLocal": null,
+          "category": "other",
+          "isFood": false,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 2299,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Janola Pwm C/Tg Eoc 750Ml",
+          "nameLocal": null,
+          "category": "household",
+          "isFood": false,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 499,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Life Flight Charity Drive Donation",
+          "nameLocal": null,
+          "category": "other",
+          "isFood": false,
+          "qty": 1,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 200,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "Chomist Warehause Centce Place\nShp So and 6s Centre Place 501 Victaria Slrdes\nHamiten Central HAMILTON\n6ST. 132 198 362 Phone:07 074 0734\nTax Invoice\nJun 20 2026 2 19PP- 116254853734712272\nServeaBy 103208 Sajlrkumar （FiLLO7）\n1 GRIN FLIPK LUSMTI!80PA”    $.49\nWhy Fay $6 S02\n1 FLXONASE AH NASAL 2#R8120    $2299\nJANOL A PURAC T/G EUC ZOGAE    $4.39\nLHE FLIGIT CHARIY DRVE DOVAP    $2.00\nTOTAL.    $35.47\n4iteinfs）\nEFT    $635.47\nChange    $0.00\nYou have saved\n$1.01\n'irdicales alaxable item\nTaaiisiudes GS1 $4 83\nEHEMIST EVAREHCUSE\nt49iWicTORi STRE\nPiX.1316\nARCC.2D:CE19E108502F1\nTVR: 0030000000\nATC:0006\n20JUN26 19:19\nT14N 464662 CREDH    ALTH 785340\nPURCASE    N2$36.47\n3-12    TCTAL    N2$35.42\nCCNTACTLESS\nMISA CREDIT\nCUSTONER SDPY\nThank-you For shopping at Chemist Wareiousa\nPoma of Real Brands with Real Savigs\nPlease ncte Refunds or Exchaiges wil ndt be\nallsepted aller / days outsidle cltatuiory obiligations\nMedicines， fragrancss， baby fernaula and vitamin\nsupplenenis refunds or exchanges wolli also nol be\nRelirns Policy - Tele    or onlinie\nvew chemis!warehouse co.nz/AboulUs/ReturnsPalioy\nPeG\nBE IN TO\nWIN\n10F 5 $1,000\nTRAVEL VOUCHERS\nSPEND $30+ ON P&G BRANDS\nIN A SINGLE TRANSACTION"
+        }
+      ]
+    },
+    {
+      "slug": "fruit_city_20260609",
+      "merchant": "FRUIT CITY SUPERMARKET",
+      "merchantAddress": "4 ENDERLEY AVENUE HAMILTON 3214",
+      "purchasedAt": "2026-06-09",
+      "purchasedTime": "17:00",
+      "totalCents": 554,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": null,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Small Green Capsicum",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 2,
+          "unit": "pc",
+          "scanUnits": 2,
+          "priceCents": 300,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Table Carrots",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.3,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 30,
+          "unitPriceCents": 100,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Tomatoes",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.32,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 224,
+          "unitPriceCents": 699,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "FRUIT CITY SUPERMARKET\n4 ENDERLEY AVENUE\nHAMILTON 3214\nG.S.T. NO:134-799-277\nPH:0277760007\n#122032-2 GITA 09-Jun-2026 17:00:56\nSMALL GREEN CAPSI 2 FOR $2.99\n2 @ $1.99 ea    $3.98\n-0.98 GREEN CAPSICUM 2 FOR $3\nTABLE CARROTS.99\n0.300 kg @ $1.00/kg    $0.30\nTOMATOES SP. 6.99\n0.320 kg @ $6.99/kg    $2.24\n—---Promot ions-\nGREEN CAPSICUM 2 FOR $3    （$0.98）\nTOTAL    $5.54\nGST Subtotal    $5.54\nGST Amount    $0.72\nEFTPOS    $5.54\nThank You\nplease visit again"
+        }
+      ]
+    },
+    {
+      "slug": "fruit_city_20260612",
+      "merchant": "FRUIT CITY SUPERMARKET",
+      "merchantAddress": "4 ENDERLEY AVENUE HAMILTON 3214",
+      "purchasedAt": "2026-06-12",
+      "purchasedTime": "08:07",
+      "totalCents": 1130,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": null,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Green Valley 2 Ltr",
+          "nameLocal": null,
+          "category": "dairy",
+          "isFood": true,
+          "qty": 2,
+          "unit": "pc",
+          "scanUnits": 2,
+          "priceCents": 750,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Banana",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 1.09,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 380,
+          "unitPriceCents": 349,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "FRUIT CITY SUPERMARKET\n4 ENDERLEY AVENUE\nHAMILTON 3214\nG.S.T. NO:134-799-277\nPH:0277760007\n#122702-2 GITA 12-Jun-2026 08:07:49\nGREEN VALLEY 2 LTR    $7.98\n2@$3.99 ea\n-0.48 GREEN/V 2L FOR $7.50\nBANANA\n$3.80\n1.090 kg @ $3.49/kg\n--Promot ions-\nGREEN/V 2L FOR $7.50    （$0.48）\nTOTAL    $11.30\nGST Subtotal    $11.30\nGST Amount    $1.47\nEFTPOS    $11.30\nThank You\nPlease visit again"
+        }
+      ]
+    },
+    {
+      "slug": "taier_cbd_20260614",
+      "merchant": "TAIER CBD",
+      "merchantAddress": "Shop A/33 Lorne Street, Auckland Central, Auckland 1010",
+      "purchasedAt": "2026-06-14",
+      "purchasedTime": "13:15",
+      "totalCents": 15140,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": null,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "TAIER CBD\n太二新西兰奥克兰CBD店\nGST:143-350-207\nReceipt-Dine in-Paid\n33\nrder No.：43    Guests:3\nStart.Time:2026-06-14 13:15:13    Print Times:2\nEnd Time:2026-06-14 14:02:06\nDishes    Gty    Total\nMapg Tofu    1/Serving    18.80\n沸腾麻婆豆腐\nChili Oil,Chicken    i/Serving    15.80\n重庆口水鸡\nCoke （No coin redemptio 1/Can    4.00\nn）\n可乐（不可兑币）\nStir-fried Beef Slices 1/Spicy香辣    29.80\n爆炒鲜牛肉\n1/Spicy音辣    68.80\n（Supreme）\n老坛子酸菜鱼（土豪版）\n--Tofu Skin    1/Serving    2.80\n一-腐竹\nSelf Serye Fee （Wuchan 3/Bit    11.40\n自助费（五常大米，花果茶，冰淇淋DIY）\nSubtotal    151.40\nGST    19.75\nSurcharge    0.00\nTotal：    151.40\nDebit Card：    151.40\n栗业    wechat_Mobile 2026-06-14 13:15:13\nPrinted Time: 2026-06-14 14:02:06\nOrder No.：9020640012026061413151300045\nDATOU 大头有智\nDatou Software Technology Co.， Ltd."
+        }
+      ]
+    },
+    {
+      "slug": "paknsave_20260624",
+      "merchant": "PAK'nSAVE",
+      "merchantAddress": "17 Mill Street, Hamilton",
+      "purchasedAt": "2026-06-24",
+      "purchasedTime": "18:33",
+      "totalCents": 2560,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 7,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Bananas",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.67,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 245,
+          "unitPriceCents": 365,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Broccoli",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 199,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Carrots",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.35,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 70,
+          "unitPriceCents": 199,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Shanghai Bok Choy",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 249,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Pams Cheese Edam Slices 250g",
+          "nameLocal": null,
+          "category": "dairy",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 399,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Spaghetti Bolognese Meal",
+          "nameLocal": null,
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 2,
+          "unit": "pack",
+          "scanUnits": 2,
+          "priceCents": 1398,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "PAKinSAVE\n果*薯% PAK'nSAVE HILL STREET *水欢*\n*w* 17 Mill Street, Hamilton **w\n**果* Gladstone Retail ltd **奶*\nPH：（07） 839-7870\nOrder online and collect from the store\nGo to paknsave.co.nz/shop\nKIA KAHA. STRESSED OR OVERWHELMED？\nCALL OR TEXT 1737 FOR FREE KORERO\nBANANAS\n$2.45\n0.670 Kg@    $3.65/Kg    $1.99\nBROCCOLI\nCARROTS    $0.70\n0.350 Kg @    $1.99/Kg    $2.49\nSHANGHAI BOK CHOY    $3.99\nPAMS CHEESE EDAM SLICES 2506\nSPAGHETTI BOLOGNASE MEAL    $13.98\n2@    $6.99\n$25.60\n7 BALANCE DUE    $25.60\nEFTPOS\n车东惠名票意常常客客**3412\nAuth Code = 762809\n$22.26\nSUB TOTAL    $3.34\nTOTAL GST    $25.60\nTOTAL\n$0.00\nCHANGE\nPAK N SAVE HILL STRE\n17 MILL STREET\nHAMILTON\n*——一 -------EFTPOS--\nTERMINAL    14011358\nTIME    24.Jun26 18:33\nTRAN 011110    CREDIT\nVISA\nCARD    …3412\nCONTACTLESS\nVISA CREDIT\nRID：    A000000003\nPIX：    1010\nAROC    38728D13B3922B4F\nTVR    0000000000\nATC    000A\nTSI    0000\nAUTH 762809\nPURCHASE    NZD25.60\nTOTAL    NZD25.60\nACCEPTED\nCUSTOMER COPY\nClub+： 605917****米*3303\nThanks for scanning your Club+ card\nand shopping smarter\nScore fuel discounts with Club+.\nSee them in the Club+ app, or simply\nscan your Club+ card at the pump.\nCASHIER NAME: SCO Cashier H\n24/06/2026 18:33:41 05011 058 2373 0115\n米*家水水洛老水客客客*TAXINVOICE 水洛米店客米寓水凉凇凇客\n****GST No:110-268-521 *水水浓\nAll items GST inclusive\nunless otherwise specified by （w）\n**容***** BE IN TO WIN $500 米冰*省*冰客*\nTell us hou we did today and go\ninto the monthly drav to win a\n$500 PAK'nSave gift card\nHave your say at paknsave.co.nz/surveys"
+        }
+      ]
+    },
+    {
+      "slug": "newsave_20260626",
+      "merchant": "NewSave",
+      "merchantAddress": "130-136 Tristram Street, Hamilton",
+      "purchasedAt": "2026-06-26",
+      "purchasedTime": "10:05",
+      "totalCents": 2802,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 7,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "ORANGE KUMARA (MED)",
+          "nameLocal": "橙番薯(中号)",
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.605,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 362,
+          "unitPriceCents": 599,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "NZ TOMATO",
+          "nameLocal": "NZ西红柿",
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.25,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 225,
+          "unitPriceCents": 899,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "HBS INSTANT BEANCURD-CHILLI",
+          "nameLocal": "好巴食豆腐干山椒味95G",
+          "category": "snacks",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 249,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "WXZ BEANCURD-SPICY&HOT",
+          "nameLocal": "五贤斋豆腐干-麻辣味108G",
+          "category": "snacks",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 319,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "WANG BUCKWHEAT NOODLE",
+          "nameLocal": "王牌荞麦面300G",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 349,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "WOODLAND FREE RANGE EGGS",
+          "nameLocal": "WL8号走地鸡蛋10个装",
+          "category": "dairy",
+          "isFood": true,
+          "qty": 10,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 599,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "GCHJ RICE DUMPLING ALKALINE WATER",
+          "nameLocal": "桂城华记豆沙枧水粽200G",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 699,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "Tax Invoice\nNewSave\n130-136 Tzistram street,Hamilton\nPH 07-8349989 GST:107-812-784\nSales :YU-I HUANG黄玉邑 Countez: 3\nInvoice No:2862495\nDATE:26-06-2026 10:05\nORANGE KUMARA （MED）\n橙番薯（中号）\n0.605 @$5.99    $3.62\nNZ TOMATO\nN2西红柿\n0.25 © $8.99    $2.25\nHBS INSTANT BEANCURD-CHILLI\n好巴食豆腐干山椒味95G\n1 @$2.49    $2.49\nWXZ BEANCURD-SPICY&HOT\n五贤斋豆腐干-麻辣味108G\n1 @$3.19    $3.19\nWANG BUCKWHEAT NOODLE\n王牌荞麦面300G\n10$3.49    $3.49\nWOODLAND FREE RANGE EGGS\nWL8号走地鸡蛋10个装\n1 e$5.99    $5.99\nGCHJ RICE DUMPLING ALKALINE WATER\n桂城华记豆沙枧水粽200G\n1 @ $6.99    $6.99\n7Items\nTOTAL：    $28.02\nEFTPOS：\nINCLUDE TAX：    $28.02\n$3.65"
+        }
+      ]
+    },
+    {
+      "slug": "new_world_20260630",
+      "merchant": "New World Morrinsville",
+      "merchantAddress": "87 Thames St, Morrinsville",
+      "purchasedAt": "2026-06-30",
+      "purchasedTime": "17:21",
+      "totalCents": 639,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 2,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Mandarin",
+          "nameLocal": null,
+          "category": "produce",
+          "isFood": true,
+          "qty": 0.48,
+          "unit": "kg",
+          "scanUnits": 1,
+          "priceCents": 240,
+          "unitPriceCents": 499,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Croissants Large 3pk",
+          "nameLocal": null,
+          "category": "bakery",
+          "isFood": true,
+          "qty": 3,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 399,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "NEW WORLD\n*辣** New Worid Morrinsville欢水 *\n*業效* 87 Thames St, Norrinsville 欢味*\n** Paul & Kym Samuels Linited **\n** Tel:07 889-800U **\nLet us do the aisle miles\nShop online vith New World\nVisit newworid.c0.nz or download the app\nKIA KAHA. STRESSED OR OVERHHELAED？\nMANDARIN CALL OR TEXT 1737 FOR FREE KORERO\n0.480 Kg @    $2.40\nCROISSANTS LARGE $4.99/Kg    $3.99\n3PK\n2 BALANCE DUE    $6.39\nEFTPOS    $6.39\n富赛意京客东客客东客客＄3412\nAuth Code = 019212\nSUB TOTAL    $5.56\nTOTAL GST    $0.83\nTOTAL    $6.39\nCHANGE    $0.00\nNEW WORLD MORRINSVIL\n79/89-97 THAMES STRE\nMORRINSVILLE\n*-———------EFTPOS-\nTERHINAL    14008954\nTINE    30Jun26 17:21\nTRAN 064452    CREDIT\nVISA\nCARD    •..3412\nCONTACTLESS\nVISA CREDIT\nRID：    A000000003\nPIX：    1010\nAROC    6712611E039B3C01\nTVR    0000000000\nATC    0000\nTSI    0000\nAUTH 019212\nPURCHASE    -NZD6.39\nTOTAL    NZD6.39\nACCEPTED\nCUSTONER COPY\nCard No: 605917******3303\nClub+ members score Club+ Dollars, Deals and\nfuel discounts at New World.\nSee your fuel discount in the Club+ app, or\nsimply scan your Club+ card at the pump.\nClubcards no longer earn New World Dollars.\nCASHIER NAHE: SCO Cashier D\n30/06/2026 17:21:53 04192 054 6152 0204\n***水水冰**** TAX INVOICE ***冰冰水冰冰*客\n*** GST No. 93-790-576 ***\nAll items GST inclusive\nunless othervise specified by《*）\n*****米** BE IN TO WIN $500 水岩水水水冰冰*\nTell us how we did today and go\ninto the monthly drau to win a\n$500 New World gift card\nHave your say at newvor ld.co.nz/survey"
+        }
+      ]
+    },
+    {
+      "slug": "wellmart_20260704",
+      "merchant": "Wellmart",
+      "merchantAddress": "27 Liverpool St. Hamilton",
+      "purchasedAt": "2026-07-04",
+      "purchasedTime": "11:25",
+      "totalCents": 797,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 3,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "XLK Hot Pot Seasoning 80g",
+          "nameLocal": "小龙坎牛油火锅底料80克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 199,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "YC Pickled Vege 208g",
+          "nameLocal": "永超外婆菜208克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 199,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "XS Tofu w/ Soya Sauce",
+          "nameLocal": "溪水牌五香干丝",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 399,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "Wellmart\nTax Invoice\n27 Liverpool St. Hamilton\nPH 07-8399058 GST:112-252-339\nPOS 2\n*** COPY ***\n#183959-4 TRAINEE Xiaoyu 04-Ju1-2026 11:25\nXLK HOT POT SEASONING 80G    $1.99\n小龙坎牛油火锅底料80克\nYC PICKLED VEGE 208G    $1.99\n永超外婆菜208克\nXS TOFU W/SOYA SAUCE    $5.99\n溪水牌五香干丝\nTOTAL    $7.97\nTotal Items:3\nGST Amount    $1.04\nEFTPOS    $7.97\nThank you for shopping! If you're unhappy\nwith anything you buy from us, we'11 ethie\nr refund your money or replace your purcha\nse. Simply return the product with your re\nceipt.\nWelimart Hamilton\n4605903\nAIC    013"
+        }
+      ]
+    },
+    {
+      "slug": "new_world_20260705",
+      "merchant": "New World Rototuna",
+      "merchantAddress": "44 Horsham Downs Road, Rototuna, Hamilton",
+      "purchasedAt": "2026-07-05",
+      "purchasedTime": "12:44",
+      "totalCents": 1202,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 3,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Morning Fresh Dishwashing Liquid Limited Edition 400ml",
+          "nameLocal": null,
+          "category": "household",
+          "isFood": false,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 249,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Palmolive Foaming Hand Wash Lime & Mint 250ml",
+          "nameLocal": null,
+          "category": "household",
+          "isFood": false,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 349,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Anchor Milk Blue Top Plastic Bottle 2L",
+          "nameLocal": null,
+          "category": "dairy",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 604,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "NEW WORLD\n* ** New Wor ld Rototuna ****\n*水容* 44 Horsham Downs Road ****\n**** Ajay Hoiaings Limited *wAm\nPH： <07》 853-0260\nShop onl ine with Hew Wor ld\nVisit nerworld.co.nz or dounload the app\nKIA KAIA. STRESSED ON OYE RWHELMED？\nCALL OR IEXT 1737 FUR FREE KORERO    $4.19\nMFRESH D/MASH LIO LTD EOL 400ML    -$1.70\nPF_MORNING FRESHD/N    $5.49\nPALNOLIVE FOAN H/MAS LIHE/NINT 250ML    -$2.00\nPAL HH 500ML/HH FOAM    $6.04\nANCHOR HILK BLUE TOP PLASTIC BIITIE 2.\n3 BALANCE DUE    $12.02\nEFTPOS    $12.02\nAuth Code = 399750\nSUB TOTAL    $10.45\nTOTAL. GST    $1.57\nTOTAL    $12.02\nCHANGE    $0.00\nNEH WORLD ROTOTUNA\n44 HORSHAH TIHNS ROA\nROTOTUNA, HAMILTON\n•---FFTPOS-\nTERHINAL    46409352\nTIHE    05Ju126 12:44\nTRAN 107562    CREDII\nVISA\nCARD    ...3412\nCONTACTLESS\nVISA CREDIT\nRID：    AC00000003\nPIX：    1010\nARQC    FODOOF5AB4FCBSDB\nTVR    0000000000\nATC    0012\nTSI    0000\nAUTH 399750\nPURCHASE    NZ012.02\nTOTAL    NZD12.02\nACCEPTED\nCUSTOHER COPY\nCard No: 605917*拳水水水*3303\nClub+ memberg score Club+ Dollars, Deals and\nfuei discounts at New Horld.\nSee your fuel discount in the Club+ app. or\nsimply scan your Club+ card at tle wump.\nClubcards no longer earn Neu World Dollars\nCASHIER NAHE: SCO Cashier B52\n05/07/2026 12:44:52 04032 052 0313 0202\n就 店发*布业*IWI2 TAX IHVOICE CRSSSKZAMNBK\ntI GSI No.66-884-260 womw\nAll iteus GST inclusive\nunless othervise specified by （a）\nBRESRATR BE IN 10 WIN SGGO JLM\nTell us hu ve did loday and go\ninto the sonthly drav to rina\n$500 Hev World gift card\nHave your say at reyrcr ld.co.nz/ sur vey"
+        }
+      ]
+    },
+    {
+      "slug": "warehouse_20260718",
+      "merchant": "The Warehouse",
+      "merchantAddress": "Te Rapa, The Base Shopping Centre, Te Rapa Road, Te Rapa",
+      "purchasedAt": "2026-07-18",
+      "purchasedTime": "15:32",
+      "totalCents": 2537,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 5,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "Whittaker's Mini Slab Almond Gold Share Pack 12 Pack",
+          "nameLocal": null,
+          "category": "snacks",
+          "isFood": true,
+          "qty": 12,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 750,
+          "unitPriceCents": null,
+          "barcode": "9403142001514",
+          "confidence": "high"
+        },
+        {
+          "name": "Whittaker's Mini Slab Creamy Milk Share Pack 12 Pack",
+          "nameLocal": null,
+          "category": "snacks",
+          "isFood": true,
+          "qty": 12,
+          "unit": "pc",
+          "scanUnits": 1,
+          "priceCents": 750,
+          "unitPriceCents": null,
+          "barcode": "9403142001538",
+          "confidence": "high"
+        },
+        {
+          "name": "Nice Milk Bottles 250g",
+          "nameLocal": null,
+          "category": "snacks",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 299,
+          "unitPriceCents": null,
+          "barcode": "9401113253450",
+          "confidence": "high"
+        },
+        {
+          "name": "Nice Marshmallows 250g",
+          "nameLocal": null,
+          "category": "snacks",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 299,
+          "unitPriceCents": null,
+          "barcode": "9401113253474",
+          "confidence": "high"
+        },
+        {
+          "name": "The Natural Confectionery Co. Soft Jellies Fruit Salad",
+          "nameLocal": null,
+          "category": "snacks",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 439,
+          "unitPriceCents": null,
+          "barcode": "9310434005801",
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "thewarehouse\nThe Warehouse\nTe Rapa, The Base Shopping Centre\nTe Rapa Road, Te Rapa\nPhone： （07）350-6243\nthewarehouse.co.nz\nTill:1854\nTax Invoice GST # 41-482-354\nDK: 95271 SP:TNL 185    18-Ju1-26 3:32pm\nuhitteka：'s Hini Slat Ainond Gold Share Pack 12 Pack 18\n9403142001514    $7.50\nMhitteker's Hini Slab Creany Milk Share Pack 12 Peck\n9403142001538    $7.50\nNice Milk Bottles 250g\n9401113253450    $2.99\nNice Marshnallaus 250g\n9401113253474    $2.99\nThe Natural Contectionery So. Soft Jellies Fruit Salad 9310434005801\n$4.39\nTotal    $25.37\nincludes GST of    $3.31\nEFTPOS VISA    $25.37\nTWL Te Rapa\nThe Base Cnr Te Rapa Road\n*11    -EFTPOS-\nTERMINAL    0005\n18 Jul 26 15:31、\nVISA    CONACTLESS\nAID    A0000000031010\nAPP LABEL    VISA CREDIT\nCARD    ************3412\nPAN SEQ Number    00\nRRN    619903544031\nAUTHORISATION    878170\nREFERENCE    010039\nPURCHASE    NZD25.37\nTOTAL    NZ025 37\nAPPROVED\nCARDHOLDER DEVICE VERIFIED\nCUSTDMER COPY\nPLEASE RETAIN\nFOR YOUR RECORDS\n0001084863031C368F00\nNIN 1 OF 10 $100-GIHICARIS！\nTELL US HOH WE DID TODAY\nGivc yuur feedback at\nwww.thewarehouse.co.nz/feedback\nsurvey code 185495271\nFuil details at www.thewarehouse.co.iz\nPLEASE KEEP THIS DUCKET AS PROOF OF PURCHASE\nTotal units sold:5\nCUSTOMER"
+        }
+      ]
+    },
+    {
+      "slug": "wellmart_20260725",
+      "merchant": "Wellmart",
+      "merchantAddress": "27 Liverpool St. Hamilton",
+      "purchasedAt": "2026-07-25",
+      "purchasedTime": "14:41",
+      "totalCents": 1504,
+      "discountCents": 0,
+      "currency": "NZD",
+      "unitsSold": 7,
+      "source": "receipt",
+      "capturePath": "gallery",
+      "modelAlias": "gemini-3.6-flash",
+      "items": [
+        {
+          "name": "MK Waterchestnut Drink 500ml",
+          "nameLocal": "康师傅竹蔗马蹄500毫升",
+          "category": "beverage",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 169,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "Kwongson Yangchun Noodles 500g",
+          "nameLocal": "广信阳春面500克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 499,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "CD Premium Ham Sausage 200g",
+          "nameLocal": "春都王中王特级火腿肠200克",
+          "category": "meat",
+          "isFood": true,
+          "qty": 2,
+          "unit": "pack",
+          "scanUnits": 2,
+          "priceCents": 499,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "FW Preserved Vege w/ Black Fungus 80g",
+          "nameLocal": "鱼泉木耳榨菜80克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 119,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "WJ Pickled Spicy & Hot Vege 80g",
+          "nameLocal": "乌江麻辣红油榨菜80克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 119,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        },
+        {
+          "name": "JXJ Hot Pickled Mustard 80g",
+          "nameLocal": "吉香居牌榨菜80克",
+          "category": "pantry_staple",
+          "isFood": true,
+          "qty": 1,
+          "unit": "pack",
+          "scanUnits": 1,
+          "priceCents": 99,
+          "unitPriceCents": null,
+          "barcode": null,
+          "confidence": "high"
+        }
+      ],
+      "pages": [
+        {
+          "pageNo": 1,
+          "ocrText": "Wellmart\nTax Invoice\n27 Liverpool st. Hamilton\nPH 07-8399058 GST:112-252-339 POS 2\n#270381-2 Tina 25-Ju1-2026 14:41:03\nMK WATERCHESNUT DRINK 500ML    $1.69\n康师傅竹蔗马蹄500毫升\nKWONGSONYANGCHUNNOODLES500    $4.99\n广信阳春面500克\nCD PREMIUM HAM SAUSAGE 200G\n2 @ $4.99 ea    $9.98\n春都王中王特级火腿肠200克\nFWPRESERVEDVEGEW/BLACKFUNGUS80    $1.19\n鱼泉木耳榨菜80克\nWJ PICKLED SPICY&HOT VEGE 80G    $1.19\n乌江麻辣红油榨菜80克\nJXJ HOT PICKLED MUSTARD 80G    $0.99\n吉香居牌榨菜80克\n----Promotions--\nCD SAUSAGE 2 FOR $4.99    （$4.99）\nTOTAL    $15.04\nTotal Items:7\nGST Amount    $1.96\nEFTPOS    $15.04\nThank you for shapping! If you're unhappy\nwith anything you buy from us, we'11 ethie\nr refund your money or replace your purcha\nse. Simply return the product with your re\nceipt.\nWellmart Hamilton\n4605903"
+        }
+      ]
+    }
+  ]
+}

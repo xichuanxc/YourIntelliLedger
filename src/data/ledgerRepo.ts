@@ -470,6 +470,54 @@ export async function deleteBill(db: SqlDriver, id: number): Promise<void> {
   if (result.changes === 0) throw new NotFoundError('Bill', id);
 }
 
+/**
+ * Removes every bill, cascading to items and cached scans. Returns how many
+ * were deleted.
+ *
+ * This is the ledger half of §15.2's delete-all. The rest of that feature —
+ * clearing `query_log`, deleting the `receipts/` image directory, resetting
+ * MMKV and revoking the device token — belongs with the Week 9 screen that
+ * asks the user to type-to-confirm. Nothing here prompts; callers own that.
+ */
+export async function deleteAllBills(db: SqlDriver): Promise<number> {
+  const result = await db.run('DELETE FROM bills');
+  return result.changes;
+}
+
+/**
+ * Replaces the cached OCR text for a bill (§4.6).
+ *
+ * Pages are stored 1-based in capture order, so a long supermarket receipt
+ * captured as two pages re-parses in the right order later (§5.2).
+ */
+export async function replaceReceiptScans(
+  db: SqlDriver,
+  billId: number,
+  pages: readonly string[]
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const bill = await tx.get<{ id: number }>('SELECT id FROM bills WHERE id = ?', [billId]);
+    if (!bill) throw new NotFoundError('Bill', billId);
+
+    await tx.run('DELETE FROM receipt_scans WHERE bill_id = ?', [billId]);
+    for (const [index, ocrText] of pages.entries()) {
+      await tx.run(
+        'INSERT INTO receipt_scans (bill_id, page_no, ocr_text) VALUES (?, ?, ?)',
+        [billId, index + 1, ocrText]
+      );
+    }
+  });
+}
+
+/** The cached OCR text for a bill, in page order. */
+export async function getReceiptScans(db: SqlDriver, billId: number): Promise<string[]> {
+  const rows = await db.all<{ ocr_text: string }>(
+    'SELECT ocr_text FROM receipt_scans WHERE bill_id = ? ORDER BY page_no',
+    [billId]
+  );
+  return rows.map((row) => row.ocr_text);
+}
+
 // ------------------------------------------------------------- internals ----
 
 async function insertItem(

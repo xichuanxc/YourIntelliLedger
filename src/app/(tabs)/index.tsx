@@ -1,8 +1,18 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useMemo } from 'react';
-import { Platform, Pressable, SectionList, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import {
+  Alert,
+  Platform,
+  Pressable,
+  SectionList,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
+import { seedCorpus } from '@/data/corpus';
 import { formatDate, formatMonth } from '@/data/dates';
+import { getDb } from '@/data/db';
 import { formatMoney } from '@/data/money';
 import type { BillSummary } from '@/types/ledger';
 import { Button } from '@/ui/components/button';
@@ -55,6 +65,7 @@ export default function LedgerScreen() {
             { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border },
           ]}
         />
+        <DevSeedButton />
       </View>
 
       {error ? (
@@ -135,6 +146,59 @@ function BillRow({ bill }: { bill: BillSummary }) {
         )}
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * Loads the eleven-receipt prototype corpus, replacing whatever is stored.
+ *
+ * Development only — `__DEV__` is false in release builds, so this never ships.
+ * The user-facing import is §15.1, in Week 9. It confirms first because it
+ * deletes every existing bill and there is no export to undo that yet.
+ */
+function DevSeedButton() {
+  const refresh = useLedgerStore((state) => state.refresh);
+  const [busy, setBusy] = useState(false);
+
+  if (!__DEV__) return null;
+
+  const run = () => {
+    Alert.alert(
+      'Load sample receipts?',
+      'This deletes every bill currently stored and loads the 11 prototype receipts. It cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Replace',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              const db = await getDb();
+              const result = await seedCorpus(db, { replaceExisting: true });
+              await refresh();
+              Alert.alert(
+                'Sample data loaded',
+                `${result.billsInserted} bills, ${result.itemsInserted} items, ` +
+                  `${result.pagesInserted} pages of OCR text. ` +
+                  `${result.deleted} previous bill${result.deleted === 1 ? '' : 's'} removed.`
+              );
+            } catch (error) {
+              Alert.alert(
+                'Could not load sample data',
+                error instanceof Error ? error.message : String(error)
+              );
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <Button label="Load sample receipts (dev)" variant="secondary" onPress={run} busy={busy} />
   );
 }
 
