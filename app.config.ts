@@ -62,6 +62,11 @@ const config: ExpoConfig = {
     // covers only 7 of the 9 call sites; `expo-autolinking-settings` hardcodes
     // "node" in Kotlin with no property or env override. `node` must be on the
     // PATH the IDE inherits — see README, "Android Studio".
+
+    // Local plugin (§2.3): R8 + resource shrinking for release builds, and the
+    // §1.1 ABI list. android/gradle.properties is generated and gitignored, so
+    // these cannot live there.
+    './plugins/with-android-build-props',
   ],
   experiments: {
     typedRoutes: true,
