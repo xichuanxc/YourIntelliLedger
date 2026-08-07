@@ -101,9 +101,9 @@ export default function LedgerScreen() {
             ) : (
               <EmptyState
                 title="No bills yet"
-                message="Add a bill by hand to get started. Receipt capture arrives in a later build."
-                actionLabel="Add a bill"
-                onAction={() => router.push('/bill/new')}
+                message="Scan a receipt to record it automatically, or add a bill by hand."
+                actionLabel="Add a receipt"
+                onAction={() => router.push('/capture')}
               />
             )
           }
@@ -208,7 +208,8 @@ function DevSeedButton() {
  */
 function AddBillAction() {
   const theme = useTheme();
-  const onPress = () => router.push('/bill/new');
+  // Capture is the primary way in now; manual entry is offered inside it.
+  const onPress = () => router.push('/capture');
 
   if (Platform.OS === 'android') {
     return (

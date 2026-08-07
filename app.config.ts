@@ -50,6 +50,7 @@ const config: ExpoConfig = {
     'expo-sqlite',
     'expo-secure-store',
     'expo-camera',
+    'expo-image-picker',
     'react-native-document-scanner-plugin',
     // NOT @react-native-ml-kit/text-recognition or /barcode-scanning: neither
     // ships an app.plugin.js (verified against the installed packages) — they

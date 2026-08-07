@@ -54,6 +54,10 @@ export default function RootLayout() {
             <Stack.Screen name="bill/new" options={{ title: 'New bill', presentation: 'modal' }} />
             <Stack.Screen name="bill/[id]" options={{ title: 'Bill' }} />
             <Stack.Screen name="bill/edit/[id]" options={{ title: 'Edit bill' }} />
+            <Stack.Screen name="capture/index" options={{ title: 'Add a receipt' }} />
+            {/* Full-screen: the camera overlay guidance in §5.2 needs the frame. */}
+            <Stack.Screen name="capture/camera" options={{ headerShown: false }} />
+            <Stack.Screen name="capture/result" options={{ title: 'Receipt text' }} />
           </Stack>
         </ThemeProvider>
       </SafeAreaProvider>
