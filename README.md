@@ -174,9 +174,15 @@ setup leaks into `node` test files that land on a worker after it. About one
 run in four, `await expect(...).rejects.toThrow()` reported "Received function
 did not throw" for SQLite errors that *were* thrown — so the schema's CHECK and
 foreign-key tests failed at random and looked for all the world like the
-constraints were missing from migration 001. `--runInBand` reproduces it too;
-separate invocations never do. If you go back to a single `jest` run, expect
-that ghost to return.
+constraints were missing from migration 001. `--runInBand` reproduces it too.
+
+Separate invocations reduce it from roughly one run in four to rare, but do
+**not** eliminate it: it has since reappeared once, on the first run after
+`npm install` changed `node_modules`, then passed 10 runs in a row. The tell is
+always the same — exactly 4 failures, all of them `rejects.toThrow()`
+assertions about SQLite constraint errors. **Re-run before believing it.** If a
+constraint test fails twice in a row, that is a real defect; once is this
+ghost.
 
 Per §10, a feature is not done until its E2E flow passes on **both**
 platforms, verified on one physical Android device and one physical iPhone.

@@ -22,8 +22,14 @@
  * themselves were missing. Rewriting one assertion as an explicit try/catch
  * made it pass while its neighbours kept failing, which is what pinned the
  * fault on the matcher rather than on SQLite. Running the projects in one
- * invocation — including with `--runInBand` — reproduces it; separate
- * invocations never do.
+ * invocation — including with `--runInBand` — reproduces it readily.
+ *
+ * Separate invocations reduce it from about one run in four to rare, but do
+ * not eliminate it: it reappeared once on the first run after `npm install`
+ * changed `node_modules`, then passed ten runs straight. The signature is
+ * always exactly 4 failures, all `rejects.toThrow()` assertions about SQLite
+ * constraint errors. Re-run before believing it; twice in a row is a real
+ * defect, once is this.
  */
 const shared = {
   moduleNameMapper: {
