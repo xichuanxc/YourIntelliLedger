@@ -189,12 +189,51 @@ platforms, verified on one physical Android device and one physical iPhone.
 
 ## Status
 
-**Weeks 3 and 4 of the §11 plan are complete.** Schema and migrations,
-repositories with the §4.11 integrity checks, manual bill entry, the ledger
-list / detail / edit / delete flow, and the Insights tab — period summaries,
-category and merchant breakdowns, and a month-over-month trend chart. Capture
-(§5) and the agent (§6) are stubbed routes that render an honest "not built
-yet" empty state.
+**Weeks 3 and 4 of the §11 plan are complete, and Week 5 is built with the
+gallery path verified on device.** Schema and migrations, repositories with the
+§4.11 integrity checks, manual bill entry, the ledger list / detail / edit /
+delete flow, the Insights tab, and capture through to raw text (§5.1). The
+agent (§6) is still a stubbed route.
+
+### Week 5 capture, verified on device
+
+Run on a physical Galaxy A03 against `taier_cbd_20260614` from the corpus, via
+the gallery path:
+
+```
+Path: gallery   Pages: 1   Words: 114   Lines: 39   Time: 1357 ms   Skew: 0.00°
+```
+
+**The §3 recognition-script gate is settled for Android.** The Chinese came
+through — `太二新西兰奥克兰CBD店`, `沸腾府婆豆腐`, `重庆口水鸡` — and every one of
+those lines would have been *silently dropped* under the binding's `LATIN`
+default, absent rather than garbled, exactly as the prototype found with
+Vision. ML Kit's `CHINESE` model reads Latin alongside it, so a single pass
+covers the bilingual corpus. §4.10's search depends on this: a `name_local`
+lost at OCR can never be found later.
+
+**§11's "prototype fixtures reproduce on-device" bar is met for this receipt.**
+Against the prototype's `out/taier_cbd_20260614.raw.txt`:
+
+| | Prototype (Vision, macOS) | Device (ML Kit, Android) |
+|---|---|---|
+| Lines | 35 | 39 |
+| Subtotal / GST / Total | 151.40 / 19.75 / 151.40 | **identical** |
+| Column structure | `Mapg Tofu␣␣␣␣1/Serving␣␣␣␣18.80` | `Mapo Tofu␣␣␣␣1/Serving␣␣␣␣18.80` |
+
+The *structure* matches; the differences are per-glyph OCR and run in both
+directions — ML Kit read `Mapo` and `Order No.` correctly where Vision gave
+`Mapg` and `rder No.`, and recovered a dish name Vision lost entirely, while
+Vision read `麻` and `腐竹` correctly where ML Kit gave `府` and `廣竹`. §5.4
+anticipated that block/line granularity might differ per platform and said the
+*thresholds*, not the algorithm, would need adjusting. They did not.
+
+**Two things this run does not establish.** The 1357 ms sits inside §8.4's
+1.5 s budget with only 143 ms to spare, but a rendered PDF is flat, evenly lit
+and perfectly square — a phone photo of a crumpled thermal receipt is none of
+those, so read it as an optimistic floor rather than a pass. And the 0.00°
+skew means geometry correction (§5.3) was never exercised beyond confirming it
+declines to act on a level page.
 
 Insights, verified on device with real data:
 
@@ -220,8 +259,10 @@ low-end row of the §1.3 matrix):
   the §14.6 undercount trap, confirmed working with real data.
 - The **release build runs standalone** with no Metro and no tunnel, under R8.
 
-Automated: 96 data-layer and unit tests, 8 component tests, typecheck and lint
-clean.
+Automated: 182 data-layer and unit tests, 8 component tests, typecheck and lint
+clean. That includes a parity test pinning the §5.4 port to the Python it was
+ported from — 200 generated receipts, exact match — skipped when `python3` is
+unavailable.
 
 Release size against the §8.4 budget of < 45 MB, measured on the arm64 slice
 with R8 on:
@@ -240,6 +281,13 @@ against an AAB, which is worth doing before Week 10.
 
 ### Known gaps
 
+- **The scanner and camera capture paths are untested on device.** Both need a
+  real receipt in front of the lens. The scanner additionally depends on Google
+  Play Services, so whether it runs at all on this Unisoc device — or falls
+  through to the camera, which is the §5.2 case the fallback exists for — is
+  unknown.
+- **Capture timing on a real photograph is unmeasured**, and geometry
+  correction has not been exercised on a genuinely skewed image.
 - **Bill edit and delete are untested on device.** The repository logic is
   covered by integration tests, but the screens themselves have only been
   exercised as far as entry and listing.
