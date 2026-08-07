@@ -9,13 +9,15 @@ section references throughout the code (`§4.4`, `§5.1`, …) point into it.
 
 | Tool | Version | Why it matters |
 |---|---|---|
-| Node | 20+ | — |
+| Node | 20+ | Must be on the PATH of whatever launches the build — see [Android Studio](#android-studio) |
 | **JDK** | **17** (Temurin or equivalent) | **Not whatever is newest.** JDK 26 fails the current AGP's `jlink`/`androidJdkImage` step outright, and takes `react-native-svg` and `react-native-masked-view` down with it — a failure that reads like a New Architecture problem but isn't (spec §1.1, §12 item 1). |
-| Xcode | latest | iOS builds only |
+| Xcode | latest | iOS builds only — **not yet installed on this machine**, so the iOS half of §12 item 1 is unverified |
 
 `npm run android` pins `JAVA_HOME` to JDK 17 automatically via
 [`scripts/with-jdk17.js`](./scripts/with-jdk17.js), so the pin survives
-`expo prebuild` regenerating `android/`. Use the same script in CI.
+`expo prebuild` regenerating `android/`. Use the same script in CI. Android
+Studio uses its own bundled JDK instead; both work, and the detail is in the
+Android Studio section below.
 
 This is an Expo **development build** — native modules mean Expo Go cannot run
 it.
@@ -39,32 +41,37 @@ npm run android      # or: npm run ios
 
 ## Android Studio
 
-**The command line is the supported build path** — `npm run android` builds,
-installs, sets up the `adb reverse` tunnel, starts Metro, and pins JDK 17, in
-one step. Android Studio earns its keep for logcat, the emulator manager, the
-layout inspector and native debugging. Using it as the *build* driver costs you
-three separate landmines, all of which have bitten this project:
+**Both build paths work.** `npm run android` builds, installs, creates the
+`adb reverse` tunnel, starts Metro and pins JDK 17 in one step. Android Studio
+imports and compiles the project too, and is where logcat, the emulator
+manager, the layout inspector and native debugging live.
 
-**1. `Exec failed, error: 2 (No such file or directory)` — this is `node`, not
-your project.** The generated Gradle files and Expo's autolinking plugin shell
-out to `node` via `Runtime.exec`, which bypasses the shell and resolves only
-against the inherited PATH. A Dock-launched Android Studio gets the bare
-launchd PATH (`launchctl getenv PATH` is unset on this machine, so
-`/usr/bin:/bin:/usr/sbin:/sbin`), which has no Homebrew. Verified: identical
-folder, identical JDK — fails without `/opt/homebrew/bin` on PATH, builds with
-it.
+Getting Studio working took four fixes. They are recorded here because each one
+presents as a different problem than it is, and a new machine will need them
+again.
 
-A config plugin *cannot* fix this. Patching the generated files covers 7 of 9
-call sites; `expo-autolinking-settings` hardcodes `"node"` in Kotlin with no
-property or environment override. Two fixes actually work:
+**1. `Exec failed, error: 2 (No such file or directory)` is `node`, not your
+project.** The generated Gradle files and Expo's autolinking plugin shell out
+to `node` via `Runtime.exec`, which bypasses the shell and resolves only
+against the inherited PATH. A Dock-launched Studio gets the bare launchd PATH,
+which has no Homebrew. Proven by A/B: identical folder and JDK, fails without
+`/opt/homebrew/bin` on PATH, builds with it.
+
+A config plugin *cannot* fix this — patching the generated files covers 7 of 9
+call sites, and `expo-autolinking-settings` hardcodes `"node"` in Kotlin with
+no property or environment override. **Resolved on this machine** by giving
+launchd itself a PATH, which fixes every GUI app permanently:
 
 ```bash
-# Per launch — inherits your shell PATH:
-"/Applications/Android Studio.app/Contents/MacOS/studio" &
-
-# Permanent, all GUI apps (needs a reboot):
 sudo launchctl config user path /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# then reboot; verify with:
+launchctl getenv PATH
 ```
+
+The setting is read at login, so it does nothing until a restart. On a machine
+where you can't do that, launching Studio from a terminal
+(`"/Applications/Android Studio.app/Contents/MacOS/studio" &`) inherits your
+shell PATH and works for that session.
 
 **2. Android Studio upgrades the Gradle wrapper behind your back.** It bumped
 9.3.1 → 9.6.1 twice here (31 Jul and 3 Aug). Under 9.6.1 the Kotlin compiler
@@ -74,24 +81,31 @@ error", minutes into the build. **Decline the "Upgrade Gradle" prompt.**
 expected version from `@react-native/gradle-plugin`, so a React Native upgrade
 moves the expectation automatically.
 
-**3. The Gradle JDK is a separate setting.** `scripts/with-jdk17.js` only pins
-`JAVA_HOME` for `npm run android`. Studio uses `.idea/gradle.xml`, which lives
-inside the generated tree and is wiped by prebuild — so
-`scripts/pin-android-studio-jdk.js` restores it as a `postprebuild` hook. It
-**fills in a missing value and never overwrites an existing one**, so a JDK you
-chose in Studio's Settings survives a regenerate.
+**3. Moving the project breaks the native build cache.** CMake bakes absolute
+paths into `node_modules/**/android/.cxx/`, so after relocating the repo the
+build fails with a `FileNotFoundException` naming the *old* path. Java build
+state relocates fine; C++ toolchain state does not. The fix is to delete the
+regenerable caches — `.cxx/` and `android/build/` under `node_modules`, plus
+`android/.gradle`, `android/build`, `android/app/build` — and rebuild.
 
-Studio currently resolves `#GRADLE_LOCAL_JAVA_HOME` to its own bundled JBR 21,
-while the CLI uses Temurin 17. Both build. The only thing that must never be
-used is the machine default (Corretto 26), which fails AGP's `jlink` step. The
-cost of the split is that Gradle runs **one daemon per JVM**, so alternating
-between Studio and the CLI can trigger a full recompile and doubles daemon
-memory. `./android/gradlew --status` lists them.
+**4. The Gradle JDK is a separate setting from the CLI's.**
+`scripts/with-jdk17.js` only pins `JAVA_HOME` for `npm run android`. Studio
+reads `.idea/gradle.xml`, which lives inside the generated tree and is wiped by
+prebuild, so `scripts/pin-android-studio-jdk.js` restores it as a
+`postprebuild` hook. It **fills in a missing value and never overwrites an
+existing one**, so a JDK chosen in Studio's Settings survives a regenerate.
 
-Finally: **a debug build has no bundled JS.** It fetches it from Metro at
-launch, so with no Metro running the app sits on the splash screen forever with
-no error. Android Studio does not start Metro and does not create the tunnel.
-After every replug:
+Studio currently resolves `#GRADLE_LOCAL_JAVA_HOME` to its own bundled JBR 21;
+the CLI uses Temurin 17. Both build. The only JDK that must never be used is
+the machine default (Corretto 26), which fails AGP's `jlink` step. The cost of
+the split is that Gradle runs **one daemon per JVM**, so alternating between
+Studio and the CLI can trigger a full recompile and doubles daemon memory —
+`./android/gradlew --status` lists them.
+
+Finally, and independent of Studio: **a debug build has no bundled JS.** It
+fetches it from Metro at launch, so with no Metro running the app sits on the
+splash screen forever with no error. Studio starts neither Metro nor the
+tunnel. After every replug:
 
 ```bash
 adb reverse tcp:8081 tcp:8081
@@ -113,6 +127,12 @@ src/
   ui/             components, theme, stores
   types/          closed vocabularies, ledger types
   platform/       the ONLY place platform forks are permitted
+
+__tests__/        node (data + logic) and ui (component) suites
+plugins/          local Expo config plugins — native config with no official plugin
+scripts/          build-environment guards (JDK pin, wrapper drift, IDE JDK)
+e2e/              Maestro flows                                       (Week 10)
+assets/receipts/  OCR fixture corpus                                  (Weeks 5–6)
 ```
 
 `ios/` and `android/` are **generated** by `expo prebuild` and are not
@@ -163,7 +183,53 @@ platforms, verified on one physical Android device and one physical iPhone.
 
 ## Status
 
-Week 3 of the plan in §11 is complete: schema and migrations, repositories with
-the §4.11 integrity checks, manual bill entry, and the ledger
-list/detail/edit/delete flow. Capture (§5), the agent (§6) and Insights are
-stubbed routes.
+**Week 3 of the §11 plan is complete.** Schema and migrations, repositories
+with the §4.11 integrity checks, manual bill entry, and the ledger
+list / detail / edit / delete flow. Capture (§5), the agent (§6) and Insights
+are stubbed routes that render an honest "not built yet" empty state.
+
+Verified on a physical Galaxy A03 (Android 13, arm64, Unisoc T606 — the
+low-end row of the §1.3 matrix):
+
+- Manual bill entry writes, and bills survive app restart **and a full APK
+  replacement** — the §11 "a manual bill survives restart" bar, on Android.
+- An **itemless bill** (§5.1) stores and displays correctly, showing "No
+  itemised lines" rather than a bogus zero.
+- Month header totals sum `bills.total_cents`, so itemless bills are included —
+  the §14.6 undercount trap, confirmed working with real data.
+- The **release build runs standalone** with no Metro and no tunnel, under R8.
+
+Automated: 96 data-layer and unit tests, 8 component tests, typecheck and lint
+clean.
+
+Release size against the §8.4 budget of < 45 MB, measured on the arm64 slice
+with R8 on:
+
+| | |
+|---|---|
+| dex | 7.7 MB (18.5 MB before R8) |
+| native libs, compressed | 14.7 MB |
+| ML Kit OCR assets, JS bundle, other | 10.3 MB |
+| **estimated download** | **≈ 32.7 MB** |
+
+Native libraries are stored *uncompressed* in the APK
+(`expo.useLegacyPackaging=false`), so the 59 MB on-disk release APK badly
+overstates what Play transfers. An authoritative figure needs `bundletool`
+against an AAB, which is worth doing before Week 10.
+
+### Known gaps
+
+- **Bill edit and delete are untested on device.** The repository logic is
+  covered by integration tests, but the screens themselves have only been
+  exercised as far as entry and listing.
+- **iOS is entirely unverified.** Xcode is not installed on this machine, so
+  §11's Week 3 bar ("`expo prebuild` produces working iOS *and* Android
+  projects") is met on Android only, and the iOS half of §12 item 1 — App
+  Attest, VisionKit, ML Kit's iOS pod under the New Architecture — is still
+  open. Per §11, do not let this drift into a "port later" phase.
+- **Release builds are signed with the debug keystore.** Fine for demos; §9.2
+  requires Play App Signing with the upload key in EAS credentials before any
+  store release.
+- **`insightsRepo`, the data catalog and MMKV prefs are not built** (Week 4 and
+  §6.3). `receipt_scans` exists in migration 001 but nothing writes to it yet,
+  so Weeks 5–6 need no schema change.
