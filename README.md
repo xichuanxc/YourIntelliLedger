@@ -183,10 +183,25 @@ platforms, verified on one physical Android device and one physical iPhone.
 
 ## Status
 
-**Week 3 of the §11 plan is complete.** Schema and migrations, repositories
-with the §4.11 integrity checks, manual bill entry, and the ledger
-list / detail / edit / delete flow. Capture (§5), the agent (§6) and Insights
-are stubbed routes that render an honest "not built yet" empty state.
+**Weeks 3 and 4 of the §11 plan are complete.** Schema and migrations,
+repositories with the §4.11 integrity checks, manual bill entry, the ledger
+list / detail / edit / delete flow, and the Insights tab — period summaries,
+category and merchant breakdowns, and a month-over-month trend chart. Capture
+(§5) and the agent (§6) are stubbed routes that render an honest "not built
+yet" empty state.
+
+Insights, verified on device with real data:
+
+- Category breakdown reconciles with the headline total. Categories live on
+  line items, so an itemless bill (§5.1) belongs to no category — it appears
+  as an explicit muted **"Not itemised"** bar instead of quietly vanishing.
+  Observed: Produce $2.99 + Not itemised $1.00 = the $3.99 total.
+- The trend keeps empty months as zeros rather than closing the gap, and
+  renders 12 months on a 720 px screen without clipping.
+- Charts use `react-native-gifted-charts` (§12 item 3 settled). It has an
+  **undeclared peer dependency on a gradient package** — without
+  `expo-linear-gradient` the screen throws at import time, which typecheck and
+  lint cannot see because the require is internal to the library.
 
 Verified on a physical Galaxy A03 (Android 13, arm64, Unisoc T606 — the
 low-end row of the §1.3 matrix):
@@ -222,6 +237,9 @@ against an AAB, which is worth doing before Week 10.
 - **Bill edit and delete are untested on device.** The repository logic is
   covered by integration tests, but the screens themselves have only been
   exercised as far as entry and listing.
+- **Insights' "no bills in this period" empty state is untested on device** —
+  every period in the current data contains bills, so that branch has only
+  been reasoned about, not seen.
 - **iOS is entirely unverified.** Xcode is not installed on this machine, so
   §11's Week 3 bar ("`expo prebuild` produces working iOS *and* Android
   projects") is met on Android only, and the iOS half of §12 item 1 — App
