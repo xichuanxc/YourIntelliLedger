@@ -88,6 +88,16 @@ state relocates fine; C++ toolchain state does not. The fix is to delete the
 regenerable caches — `.cxx/` and `android/build/` under `node_modules`, plus
 `android/.gradle`, `android/build`, `android/app/build` — and rebuild.
 
+**3a. `SDK location not found` right after a prebuild.**
+`android/local.properties` carries `sdk.dir`, is machine-specific and therefore
+gitignored, and is written by Android Studio on first sync — not by prebuild.
+So a prebuild followed straight by a command-line build fails before compiling
+anything, with a message that reads like a broken machine rather than a
+generated file that has not been generated yet.
+`scripts/write-local-properties.js` writes it from `ANDROID_HOME` or the
+platform default, as a `postprebuild` hook. Like the JDK pin, it **never
+overwrites an existing file** — Studio owns it once it exists.
+
 **4. The Gradle JDK is a separate setting from the CLI's.**
 `scripts/with-jdk17.js` only pins `JAVA_HOME` for `npm run android`. Studio
 reads `.idea/gradle.xml`, which lives inside the generated tree and is wiped by

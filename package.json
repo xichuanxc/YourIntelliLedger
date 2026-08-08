@@ -56,7 +56,7 @@
     "android": "node ./scripts/with-jdk17.js expo run:android",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild --clean",
-    "postprebuild": "node ./scripts/pin-android-studio-jdk.js",
+    "postprebuild": "node ./scripts/pin-android-studio-jdk.js && node ./scripts/write-local-properties.js",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test": "jest --selectProjects node && jest --selectProjects ui",
