@@ -48,7 +48,15 @@ const PIN_TIP_RATIO = 21 / 24;
 type State =
   | { kind: 'loading' }
   | { kind: 'ready'; point: GeoPoint }
-  | { kind: 'unavailable' };
+  /**
+   * The address resolved to nothing. Usually a misread — OCR drops a digit
+   * from a street number often enough to matter — and the fix is to edit the
+   * bill, which is not discoverable from a blank space. So this one is said
+   * out loud.
+   */
+  | { kind: 'not-found' }
+  /** Offline, or the service refused. Nothing to do with the address. */
+  | { kind: 'failed' };
 
 export interface MapPreviewProps {
   address: string;
@@ -65,7 +73,7 @@ export interface MapPreviewProps {
 function fromCache(address: string): State {
   const cached = readCache(address);
   if (cached.kind === 'hit') return { kind: 'ready', point: cached.point };
-  if (cached.kind === 'miss') return { kind: 'unavailable' };
+  if (cached.kind === 'miss') return { kind: 'not-found' };
   return { kind: 'loading' };
 }
 
@@ -93,9 +101,12 @@ export function MapPreview({ address, width, onPress }: MapPreviewProps) {
         // a definitive "no such place" is, which is what `geocode` returning
         // null means.
         writeCache(address, point);
-        if (!cancelled) setState(point ? { kind: 'ready', point } : { kind: 'unavailable' });
+        if (!cancelled) setState(point ? { kind: 'ready', point } : { kind: 'not-found' });
       } catch {
-        if (!cancelled) setState({ kind: 'unavailable' });
+        // Not cached, and reported differently: the address may be perfect and
+        // the phone simply offline. Telling the user to check a correct address
+        // would send them looking for a fault that is not there.
+        if (!cancelled) setState({ kind: 'failed' });
       }
     })();
 
@@ -104,7 +115,15 @@ export function MapPreview({ address, width, onPress }: MapPreviewProps) {
     };
   }, [address]);
 
-  if (state.kind === 'unavailable') return null;
+  if (state.kind === 'not-found' || state.kind === 'failed') {
+    return (
+      <ThemedText type="small" themeColor="textSecondary">
+        {state.kind === 'not-found'
+          ? 'This address could not be found on a map. If it was misread, Edit the bill to correct it.'
+          : 'Map unavailable — no connection.'}
+      </ThemedText>
+    );
+  }
 
   return (
     <Pressable
