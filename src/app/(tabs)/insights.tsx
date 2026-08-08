@@ -22,7 +22,8 @@ import {
 import { formatMoney, formatMoneyCompact } from '@/data/money';
 import type { CategoryBreakdown, MerchantTotal, MonthTotal, SpendSummary } from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
-import { BreakdownBar } from '@/ui/components/breakdown-bar';
+import { DonutBreakdown } from '@/ui/components/donut-breakdown';
+import type { SliceInput } from '@/ui/chartSlices';
 import { ChipSelect } from '@/ui/components/chip-select';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
@@ -131,12 +132,37 @@ export default function InsightsScreen() {
   }
 
   const { summary, breakdown, merchants, period } = data;
-  const largestCategory = Math.max(
-    ...breakdown.categories.map((c) => c.totalCents),
-    Math.max(breakdown.unitemisedCents, 0),
-    1
-  );
-  const largestMerchant = Math.max(...merchants.map((m) => m.totalCents), 1);
+
+  // The remainder is marked neutral so the slice builder never folds it away —
+  // it is where §14.6's undercount becomes visible.
+  const categoryEntries: SliceInput[] = [
+    ...breakdown.categories.map((entry) => ({
+      key: entry.category,
+      label: CATEGORY_LABELS[entry.category],
+      valueCents: entry.totalCents,
+    })),
+    ...(breakdown.unitemisedCents > 0
+      ? [
+          {
+            key: 'unitemised',
+            label: 'Not itemised',
+            valueCents: breakdown.unitemisedCents,
+            neutral: true,
+          },
+        ]
+      : []),
+  ];
+
+  const merchantEntries: SliceInput[] = merchants.map((merchant) => ({
+    key: merchant.merchantNorm ?? 'unnamed',
+    label: merchant.merchant ?? 'Unnamed merchant',
+    valueCents: merchant.totalCents,
+  }));
+
+  // The merchant query returns the top few, so its donut is a whole of what is
+  // shown, not of all spending. Labelling it with the period total would claim
+  // a share it does not have.
+  const merchantTotal = merchantEntries.reduce((sum, entry) => sum + entry.valueCents, 0);
 
   return (
     <Screen>
@@ -209,57 +235,35 @@ export default function InsightsScreen() {
                   ? 'Categories come from line items, so bills with no items sit in “Not itemised”.'
                   : undefined
               }>
-              {breakdown.categories.length === 0 && breakdown.unitemisedCents === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  No itemised spending in this period.
+              <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+                <DonutBreakdown
+                  entries={categoryEntries}
+                  currency={summary.currency}
+                  totalCents={breakdown.totalCents}
+                  emptyMessage="No itemised spending in this period."
+                />
+              </View>
+
+              {breakdown.unitemisedCents < 0 && (
+                <ThemedText type="small" themeColor="warning">
+                  Line items add up to{' '}
+                  {formatMoney(-breakdown.unitemisedCents, summary.currency)} more than the printed
+                  totals. Worth checking those bills.
                 </ThemedText>
-              ) : (
-                <>
-                  {breakdown.categories.map((entry) => (
-                    <BreakdownBar
-                      key={entry.category}
-                      label={CATEGORY_LABELS[entry.category]}
-                      value={formatMoney(entry.totalCents, summary.currency)}
-                      fraction={entry.totalCents / largestCategory}
-                      caption={`${entry.itemCount} item${entry.itemCount === 1 ? '' : 's'}`}
-                    />
-                  ))}
-                  {breakdown.unitemisedCents > 0 && (
-                    <BreakdownBar
-                      muted
-                      label="Not itemised"
-                      value={formatMoney(breakdown.unitemisedCents, summary.currency)}
-                      fraction={breakdown.unitemisedCents / largestCategory}
-                      caption="Bills with no line items, discounts and illegible prices"
-                    />
-                  )}
-                  {breakdown.unitemisedCents < 0 && (
-                    <ThemedText type="small" themeColor="warning">
-                      Line items add up to{' '}
-                      {formatMoney(-breakdown.unitemisedCents, summary.currency)} more than the
-                      printed totals. Worth checking those bills.
-                    </ThemedText>
-                  )}
-                </>
               )}
             </Section>
 
             <Section title="Top merchants">
-              {merchants.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  No merchants recorded in this period.
-                </ThemedText>
-              ) : (
-                merchants.map((merchant) => (
-                  <BreakdownBar
-                    key={merchant.merchantNorm ?? 'unnamed'}
-                    label={merchant.merchant ?? 'Unnamed merchant'}
-                    value={formatMoney(merchant.totalCents, summary.currency)}
-                    fraction={merchant.totalCents / largestMerchant}
-                    caption={`${merchant.billCount} bill${merchant.billCount === 1 ? '' : 's'}`}
-                  />
-                ))
-              )}
+              <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+                <DonutBreakdown
+                  entries={merchantEntries}
+                  currency={summary.currency}
+                  totalCents={merchantTotal}
+                  totalLabel={`top ${merchantEntries.length}`}
+                  foldedLabel="Other merchants"
+                  emptyMessage="No merchants recorded in this period."
+                />
+              </View>
             </Section>
           </>
         )}
