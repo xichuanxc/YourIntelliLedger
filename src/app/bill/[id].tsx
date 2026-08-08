@@ -1,6 +1,15 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
@@ -11,6 +20,7 @@ import { CATEGORY_LABELS, UNIT_LABELS } from '@/types/vocabulary';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { FlagBanner } from '@/ui/components/flag-banner';
+import { MapPinIcon, NavigateIcon } from '@/ui/components/map-icons';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -103,17 +113,34 @@ export default function BillDetailScreen() {
         <FlagBanner flags={bill.parseFlags} />
 
         {bill.merchantAddress && (
-          <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Store address
-            </ThemedText>
-            <ThemedText>{bill.merchantAddress}</ThemedText>
-            <Button
-              label="Navigate here"
-              variant="secondary"
+          <View style={[styles.addressCard, { backgroundColor: theme.backgroundElement }]}>
+            <MapPinIcon />
+            <View style={styles.addressText}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Store address
+              </ThemedText>
+              <ThemedText>{bill.merchantAddress}</ThemedText>
+            </View>
+            {/* Compact rather than full-width: this is a secondary action on a
+                screen whose primary job is the bill itself. */}
+            <Pressable
               onPress={() => openMaps(bill.merchantAddress!)}
+              accessibilityRole="button"
+              accessibilityLabel="Navigate to this store"
               accessibilityHint="Opens the address in your maps app"
-            />
+              hitSlop={10}
+              style={({ pressed }) => [
+                styles.navigateButton,
+                {
+                  backgroundColor: pressed ? theme.backgroundSelected : theme.background,
+                  borderColor: theme.border,
+                },
+              ]}>
+              <NavigateIcon />
+              <ThemedText type="smallBold" themeColor="primary">
+                Navigate
+              </ThemedText>
+            </Pressable>
           </View>
         )}
 
@@ -231,6 +258,24 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.four, gap: Spacing.four, paddingBottom: Spacing.seven },
   summary: { gap: Spacing.one },
   card: { borderRadius: Radius.medium, padding: Spacing.four, gap: Spacing.two },
+  addressCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    borderRadius: Radius.medium,
+    padding: Spacing.four,
+  },
+  addressText: { flex: 1, gap: Spacing.half },
+  navigateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 36,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'baseline',
