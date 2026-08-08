@@ -26,6 +26,12 @@ export interface ParseOutcome {
   /** True when the first attempt was rejected and the retry succeeded. */
   retried: boolean;
   durationMs: number;
+  /**
+   * Token counts from the provider, when it reports them. Kept because output
+   * length is what dominates parse latency — a receipt's JSON is far longer
+   * than its text, so a slow parse is usually generation, not upload.
+   */
+  usage?: { promptTokens?: number; completionTokens?: number; thoughtTokens?: number };
 }
 
 /** Raised when both attempts fail; §5.5 then falls back to manual entry. */
@@ -79,13 +85,24 @@ export async function parseReceipt(
     }
 
     const checked = runPostChecks(validated.value);
+    const durationMs = Date.now() - startedAt;
+
+    if (__DEV__) {
+      console.log(
+        `[parse] ${durationMs}ms attempts=${attempt + 1} ` +
+          `in=${response.usage?.promptTokens ?? '?'} out=${response.usage?.completionTokens ?? "?"} think=${response.usage?.thoughtTokens ?? "?"} ` +
+          `items=${checked.receipt.items.length}`
+      );
+    }
+
     return {
       receipt: checked.receipt,
       flags: checked.flags,
       issues: checked.issues,
       modelAlias: response.modelAlias,
       retried: attempt > 0,
-      durationMs: Date.now() - startedAt,
+      durationMs,
+      usage: response.usage,
     };
   }
 

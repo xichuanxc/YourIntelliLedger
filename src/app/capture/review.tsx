@@ -124,6 +124,12 @@ export default function ReviewScreen() {
 
         <FlagBanner flags={parse.flags} />
 
+        {__DEV__ && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {`${(parse.durationMs / 1000).toFixed(1)}s · ${parse.usage?.promptTokens ?? '?'} in / ${parse.usage?.completionTokens ?? '?'} out / ${parse.usage?.thoughtTokens ?? 0} thinking · ${parse.modelAlias}${parse.retried ? ' · RETRIED' : ''}`}
+          </ThemedText>
+        )}
+
         {lowConfidenceCount > 0 && (
           <Pressable
             onPress={() => scroll.current?.scrollTo({ y: 260, animated: true })}

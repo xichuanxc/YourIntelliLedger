@@ -37,7 +37,7 @@ export interface ParseResponse {
   text: string;
   /** Which model answered, recorded on the bill as `model_alias` (§4.4). */
   modelAlias: string;
-  usage?: { promptTokens?: number; completionTokens?: number };
+  usage?: { promptTokens?: number; completionTokens?: number; thoughtTokens?: number };
 }
 
 export interface ParseTransport {

@@ -25,7 +25,17 @@ const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    /**
+     * Internal reasoning tokens. Recent flash models think before answering,
+     * and those tokens are billed and *timed* but never appear in the output —
+     * so a parse can take far longer than its JSON length suggests. Captured
+     * because "why is this slow" is otherwise unanswerable from the client.
+     */
+    thoughtsTokenCount?: number;
+  };
   error?: { message?: string; status?: string };
 }
 
@@ -97,6 +107,7 @@ export function createByokTransport(): ParseTransport {
         usage: {
           promptTokens: body.usageMetadata?.promptTokenCount,
           completionTokens: body.usageMetadata?.candidatesTokenCount,
+          thoughtTokens: body.usageMetadata?.thoughtsTokenCount,
         },
       };
     },
