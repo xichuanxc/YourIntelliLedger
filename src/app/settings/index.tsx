@@ -26,7 +26,7 @@ import {
 } from '@/agent/byokKey';
 import { getDb } from '@/data/db';
 import { getBlockScreenshots, setBlockScreenshots } from '@/data/prefs';
-import { applyScreenshotPolicy } from '@/data/screenPrivacy';
+import { applyScreenshotPolicy, SCREENSHOT_BLOCKING_SUPPORTED } from '@/data/screenPrivacy';
 import { getUsageForMonth, type UsageSummary } from '@/data/telemetryRepo';
 import { formatMonth } from '@/data/dates';
 import { Button } from '@/ui/components/button';
@@ -45,6 +45,7 @@ export default function SettingsScreen() {
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [blockShots, setBlockShots] = useState(false);
+  const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -76,7 +77,18 @@ export default function SettingsScreen() {
   const toggleScreenshots = async (value: boolean) => {
     setBlockShots(value);
     setBlockScreenshots(value);
-    await applyScreenshotPolicy(value);
+
+    // The preference is stored either way, so it takes effect on the next
+    // launch that has the native side. But saying "on" when nothing happened
+    // would be a privacy promise the app is not keeping.
+    const applied = await applyScreenshotPolicy(value);
+    setScreenshotNote(
+      applied || !value
+        ? null
+        : SCREENSHOT_BLOCKING_SUPPORTED
+          ? 'Saved, but not active until the app is rebuilt with this feature.'
+          : 'Not available on this platform — iOS has no equivalent (§8.2).'
+    );
   };
 
   return (
@@ -185,6 +197,11 @@ export default function SettingsScreen() {
               accessibilityLabel="Block screenshots"
             />
           </View>
+          {screenshotNote && (
+            <ThemedText type="small" themeColor="warning">
+              {screenshotNote}
+            </ThemedText>
+          )}
         </Section>
 
         <Section title="Not built yet">

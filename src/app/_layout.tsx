@@ -32,6 +32,7 @@ export default function RootLayout() {
 
     // §8.2: the screenshot block is a stored preference, so it has to be
     // re-applied on every launch — the flag itself does not persist.
+    // Never throws by contract, so no catch is needed here (see screenPrivacy).
     void applyScreenshotPolicy(getBlockScreenshots());
   }, []);
 

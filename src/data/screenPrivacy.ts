@@ -22,9 +22,28 @@ import * as ScreenCapture from 'expo-screen-capture';
 /** True where the toggle does something. */
 export const SCREENSHOT_BLOCKING_SUPPORTED = Platform.OS === 'android';
 
-export async function applyScreenshotPolicy(block: boolean): Promise<void> {
-  if (!SCREENSHOT_BLOCKING_SUPPORTED) return;
+/**
+ * Applies the policy. Returns whether it actually took effect.
+ *
+ * **Never throws.** This is called during app startup, and a privacy toggle
+ * that cannot be applied must not take the launch with it. The failure that
+ * proved the point: after adding this module the installed build predated the
+ * native side, so every launch raised an uncaught
+ * `Cannot find native module 'ExpoScreenCapture'`.
+ *
+ * A caller who needs to tell the user it did not work should read the return
+ * value; nobody should have to wrap this in a try/catch.
+ */
+export async function applyScreenshotPolicy(block: boolean): Promise<boolean> {
+  if (!SCREENSHOT_BLOCKING_SUPPORTED) return false;
 
-  if (block) await ScreenCapture.preventScreenCaptureAsync();
-  else await ScreenCapture.allowScreenCaptureAsync();
+  try {
+    if (block) await ScreenCapture.preventScreenCaptureAsync();
+    else await ScreenCapture.allowScreenCaptureAsync();
+    return true;
+  } catch {
+    // Typically a JS bundle newer than the installed native build. Degrading
+    // silently is right: the ledger is entirely usable without this.
+    return false;
+  }
 }
