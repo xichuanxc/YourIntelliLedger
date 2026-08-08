@@ -1,3 +1,4 @@
+import { expectRejection } from '../support/expectRejection';
 import { openTestDriver } from '../support/sqlite-driver';
 
 import type { SqlDriver } from '@/data/driver';
@@ -66,7 +67,7 @@ describe('migrate (spec §4.12)', () => {
     };
 
     await migrate(db, MIGRATIONS);
-    await expect(migrate(db, [...MIGRATIONS, broken])).rejects.toThrow();
+    await expectRejection(() => migrate(db, [...MIGRATIONS, broken]));
 
     // The point of the per-migration transaction: no half-applied state.
     expect(await userVersion(db)).toBe(1);
@@ -77,12 +78,12 @@ describe('migrate (spec §4.12)', () => {
     await migrate(db);
     await db.exec('PRAGMA user_version = 99');
 
-    await expect(migrate(db)).rejects.toThrow(/only knows up to/);
+    await expectRejection(() => migrate(db), { message: /only knows up to/ });
   });
 
   it('rejects a migration list with a gap or duplicate', async () => {
     const gap: Migration = { version: 3, name: 'gap', sql: 'SELECT 1' };
-    await expect(migrate(db, [...MIGRATIONS, gap])).rejects.toThrow(/contiguous/);
+    await expectRejection(() => migrate(db, [...MIGRATIONS, gap]), { message: /contiguous/ });
   });
 
   it('keeps the shipped migration list contiguous from 1', () => {
@@ -112,21 +113,23 @@ describe('schema 001 constraints (spec §4.4, §4.7)', () => {
     );
 
   it('rejects a value outside a closed vocabulary rather than storing it', async () => {
-    await expect(insertBill('imported')).rejects.toThrow();
+    await expectRejection(() => insertBill('imported'));
   });
 
   it('accepts a NULL capture_path for a manual bill', async () => {
-    await expect(insertBill('manual', null)).resolves.toBeDefined();
+    // NULL passes `CHECK (capture_path IN (...))` — a manual bill had no capture.
+    const result = await insertBill('manual', null);
+    expect(result.lastInsertRowId).toBeGreaterThan(0);
   });
 
   it('rejects an unknown category on a line item', async () => {
     const bill = await insertBill();
-    await expect(
+    await expectRejection(() =>
       db.run(
         `INSERT INTO bill_items (bill_id, line_no, name, category) VALUES (?, 1, 'x', 'vegetables')`,
         [bill.lastInsertRowId]
       )
-    ).rejects.toThrow();
+    );
   });
 
   it('cascades line items and cached OCR text when a bill is deleted', async () => {
@@ -147,8 +150,6 @@ describe('schema 001 constraints (spec §4.4, §4.7)', () => {
   });
 
   it('rejects a line item whose bill does not exist', async () => {
-    await expect(
-      db.run(`INSERT INTO bill_items (bill_id, line_no, name, category) VALUES (9999, 1, 'x', 'other')`)
-    ).rejects.toThrow();
+    await expectRejection(() => db.run(`INSERT INTO bill_items (bill_id, line_no, name, category) VALUES (9999, 1, 'x', 'other')`));
   });
 });

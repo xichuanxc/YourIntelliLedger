@@ -1,3 +1,4 @@
+import { expectRejection } from '../support/expectRejection';
 import { openTestDriver } from '../support/sqlite-driver';
 
 import type { SqlDriver } from '@/data/driver';
@@ -122,55 +123,41 @@ describe('createBill', () => {
 
 describe('createBill validation', () => {
   it('rejects an impossible date before touching the database', async () => {
-    await expect(createBill(db, { ...groceries, purchasedAt: '2026-02-30' })).rejects.toThrow(
-      ValidationError
-    );
+    await expectRejection(() => createBill(db, { ...groceries, purchasedAt: '2026-02-30' }), { type: ValidationError });
     expect(await countBills(db)).toBe(0);
   });
 
   it('rejects a malformed time', async () => {
-    await expect(createBill(db, { ...groceries, purchasedTime: '25:00' })).rejects.toThrow(
-      ValidationError
-    );
+    await expectRejection(() => createBill(db, { ...groceries, purchasedTime: '25:00' }), { type: ValidationError });
   });
 
   it('rejects fractional cents — money is integers (§4.3)', async () => {
-    await expect(createBill(db, { ...groceries, totalCents: 12.5 })).rejects.toThrow(
-      /whole cents/
-    );
+    await expectRejection(() => createBill(db, { ...groceries, totalCents: 12.5 }), { message: /whole cents/ });
   });
 
   it('rejects a negative discount, which would invert the sum check', async () => {
-    await expect(createBill(db, { ...groceries, discountCents: -100 })).rejects.toThrow(
-      ValidationError
-    );
+    await expectRejection(() => createBill(db, { ...groceries, discountCents: -100 }), { type: ValidationError });
   });
 
   it('rejects an item outside the category vocabulary (§4.7)', async () => {
-    await expect(
-      createBill(db, {
+    await expectRejection(() => createBill(db, {
         ...groceries,
         items: [{ name: 'Carrots', category: 'vegetables' as never }],
-      })
-    ).rejects.toThrow(/not a valid category/);
+      }), { message: /not a valid category/ });
   });
 
   it('rejects an empty item name', async () => {
-    await expect(
-      createBill(db, { ...groceries, items: [{ name: '   ', category: 'other' }] })
-    ).rejects.toThrow(/cannot be empty/);
+    await expectRejection(() => createBill(db, { ...groceries, items: [{ name: '   ', category: 'other' }] }), { message: /cannot be empty/ });
   });
 
   it('writes nothing when a later item fails validation', async () => {
-    await expect(
-      createBill(db, {
+    await expectRejection(() => createBill(db, {
         ...groceries,
         items: [
           { name: 'Good', category: 'produce', priceCents: 100 },
           { name: 'Bad', category: 'nonsense' as never },
         ],
-      })
-    ).rejects.toThrow(ValidationError);
+      }), { type: ValidationError });
 
     expect(await countBills(db)).toBe(0);
   });
@@ -191,7 +178,7 @@ describe('transactional writes (spec §10 — rollback on failed receipt write)'
       ],
     };
 
-    await expect(createBill(db, bad)).rejects.toThrow();
+    await expectRejection(() => createBill(db, bad));
 
     expect(await countBills(db)).toBe(0);
     expect(await db.all('SELECT * FROM bill_items')).toHaveLength(0);
@@ -248,12 +235,12 @@ describe('updateBill', () => {
   });
 
   it('rejects an unknown bill', async () => {
-    await expect(updateBill(db, 404, { totalCents: 1 })).rejects.toThrow(NotFoundError);
+    await expectRejection(() => updateBill(db, 404, { totalCents: 1 }), { type: NotFoundError });
   });
 
   it('rejects an invalid date without changing anything', async () => {
     const id = await createBill(db, groceries);
-    await expect(updateBill(db, id, { purchasedAt: 'yesterday' })).rejects.toThrow(ValidationError);
+    await expectRejection(() => updateBill(db, id, { purchasedAt: 'yesterday' }), { type: ValidationError });
     expect((await getBill(db, id))!.purchasedAt).toBe('2026-07-19');
   });
 });
@@ -308,17 +295,15 @@ describe('line item editing', () => {
   });
 
   it('rejects edits to an unknown item', async () => {
-    await expect(updateBillItem(db, 404, { qty: 2 })).rejects.toThrow(NotFoundError);
-    await expect(deleteBillItem(db, 404)).rejects.toThrow(NotFoundError);
+    await expectRejection(() => updateBillItem(db, 404, { qty: 2 }), { type: NotFoundError });
+    await expectRejection(() => deleteBillItem(db, 404), { type: NotFoundError });
   });
 
   it('rejects an invalid unit without writing', async () => {
     const id = await createBill(db, groceries);
     const [bananas] = (await getBill(db, id))!.items;
 
-    await expect(updateBillItem(db, bananas.id, { unit: 'litres' as never })).rejects.toThrow(
-      ValidationError
-    );
+    await expectRejection(() => updateBillItem(db, bananas.id, { unit: 'litres' as never }), { type: ValidationError });
     expect((await getBill(db, id))!.items[0].unit).toBe('kg');
   });
 });
@@ -333,7 +318,7 @@ describe('deleteBill', () => {
   });
 
   it('rejects an unknown bill rather than succeeding silently', async () => {
-    await expect(deleteBill(db, 404)).rejects.toThrow(NotFoundError);
+    await expectRejection(() => deleteBill(db, 404), { type: NotFoundError });
   });
 });
 

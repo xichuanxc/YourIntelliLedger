@@ -1,3 +1,4 @@
+import { expectRejection } from '../support/expectRejection';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -60,9 +61,7 @@ describe('parseReceipt (§5.1, §5.5)', () => {
     const bad = JSON.stringify({ ...goodReceipt, purchased_at: 'yesterday' });
     const transport = fakeTransport([bad, bad, bad]);
 
-    await expect(parseReceipt(transport, 'raw text', { prompt: PROMPT })).rejects.toThrow(
-      ParseFailedError
-    );
+    await expectRejection(() => parseReceipt(transport, 'raw text', { prompt: PROMPT }), { type: ParseFailedError });
     // Not a loop: two attempts, no more. The user is waiting.
     expect(transport.requests).toHaveLength(2);
   });

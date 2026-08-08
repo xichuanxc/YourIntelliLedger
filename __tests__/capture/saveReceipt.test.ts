@@ -1,3 +1,4 @@
+import { expectRejection } from '../support/expectRejection';
 import { openTestDriver } from '../support/sqlite-driver';
 
 import type { ParsedItem, ParsedReceipt } from '@/capture/parseContract';
@@ -130,12 +131,10 @@ describe('saveReviewedReceipt (§5.1 single transaction)', () => {
   });
 
   it('writes nothing when the bill is invalid — no orphaned scans', async () => {
-    await expect(
-      saveReviewedReceipt(
+    await expectRejection(() => saveReviewedReceipt(
         db,
         reviewed(receipt([item()], { purchased_at: '2026-02-30' }))
-      )
-    ).rejects.toThrow();
+      ));
 
     expect(await db.all('SELECT * FROM bills')).toHaveLength(0);
     expect(await db.all('SELECT * FROM receipt_scans')).toHaveLength(0);

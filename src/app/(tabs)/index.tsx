@@ -17,6 +17,7 @@ import { formatMoney } from '@/data/money';
 import type { BillSummary } from '@/types/ledger';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
+import { GearIcon } from '@/ui/components/gear-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -51,7 +52,17 @@ export default function LedgerScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <ThemedText type="title">Ledger</ThemedText>
+        <View style={styles.titleRow}>
+          <ThemedText type="title">Ledger</ThemedText>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            hitSlop={12}
+            style={styles.gear}>
+            <GearIcon />
+          </Pressable>
+        </View>
         <TextInput
           value={search}
           onChangeText={setSearch}
@@ -235,6 +246,8 @@ function AddBillAction() {
 
 const styles = StyleSheet.create({
   header: { padding: Spacing.four, gap: Spacing.three },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  gear: { minWidth: MinTouchTarget, minHeight: MinTouchTarget, alignItems: 'flex-end', justifyContent: 'center' },
   search: {
     minHeight: MinTouchTarget,
     borderRadius: Radius.medium,

@@ -12,6 +12,8 @@
 import { create } from 'zustand';
 
 import { createByokTransport } from '@/agent/byokTransport';
+import { getDb } from '@/data/db';
+import { logQuery, type QueryLogEntry } from '@/data/telemetryRepo';
 import { processCapture, type CaptureResult } from '@/capture/pipeline';
 import { parseReceipt, type ParseOutcome } from '@/capture/parseReceipt';
 import {
@@ -46,6 +48,25 @@ interface CaptureState {
   reset: () => void;
 }
 
+/**
+ * Records a parse in `query_log` (§15.3).
+ *
+ * Never allowed to break a capture: telemetry is a diagnostic convenience, and
+ * a user who has just read a receipt should not lose it because a counter
+ * could not be written.
+ */
+async function logParse(
+  outcome: QueryLogEntry['outcome'],
+  fields: Omit<QueryLogEntry, 'route' | 'outcome' | 'toolCalls'>
+): Promise<void> {
+  try {
+    const db = await getDb();
+    await logQuery(db, { route: 'agent', outcome, toolCalls: ['parse_receipt'], ...fields });
+  } catch {
+    // Deliberately swallowed.
+  }
+}
+
 export const useCaptureStore = create<CaptureState>((set) => ({
   status: 'idle',
   result: null,
@@ -66,15 +87,36 @@ export const useCaptureStore = create<CaptureState>((set) => ({
     if (!result) return 'failed';
 
     set({ status: 'parsing', error: null });
+    const startedAt = Date.now();
+
     try {
       const parse = await parseReceipt(createByokTransport(), result.text);
       set({ parse, status: 'parsed' });
+
+      // §15.3: counters only, no content. `retry` when the first attempt was
+      // rejected and the second succeeded — the outcome the user experienced
+      // was still a good answer, just a slower one.
+      await logParse(parse.retried ? 'retry' : 'ok', {
+        tokensIn: parse.usage?.promptTokens,
+        tokensOut: parse.usage?.completionTokens,
+        modelAlias: parse.modelAlias,
+        latencyMs: parse.durationMs,
+      });
+
       return 'parsed';
     } catch (error) {
       set({
         status: 'error',
         error: error instanceof Error ? error.message : 'The receipt could not be read.',
       });
+
+      // Failures are logged too, or the usage figures would flatter the app by
+      // counting only what worked.
+      await logParse('error', {
+        latencyMs: Date.now() - startedAt,
+        errorCode: error instanceof Error ? error.name : 'unknown',
+      });
+
       return 'failed';
     }
   },

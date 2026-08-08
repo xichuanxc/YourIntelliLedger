@@ -7,6 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { getDb } from '@/data/db';
+import { getBlockScreenshots } from '@/data/prefs';
+import { applyScreenshotPolicy } from '@/data/screenPrivacy';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useColorScheme } from '@/ui/hooks/use-color-scheme';
 import { Spacing } from '@/ui/theme';
@@ -27,6 +29,10 @@ export default function RootLayout() {
       .finally(() => {
         void SplashScreen.hideAsync();
       });
+
+    // §8.2: the screenshot block is a stored preference, so it has to be
+    // re-applied on every launch — the flag itself does not persist.
+    void applyScreenshotPolicy(getBlockScreenshots());
   }, []);
 
   if (error) {
