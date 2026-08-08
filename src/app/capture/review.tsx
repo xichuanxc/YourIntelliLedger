@@ -21,7 +21,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { centsToInput, formatMoney, parseCents } from '@/data/money';
-import { formatDate } from '@/data/dates';
+import { formatDate, isValidLocalDate } from '@/data/dates';
 import { getDb } from '@/data/db';
 import { saveReviewedReceipt } from '@/capture/saveReceipt';
 import type { ParsedItem } from '@/capture/parseContract';
@@ -49,6 +49,20 @@ export default function ReviewScreen() {
   const [excluded, setExcluded] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Editable here because this is the last point before anything is stored
+  // (§5.6), and both are things the parse gets wrong in ways the item list
+  // cannot reveal.
+  const [purchasedAt, setPurchasedAt] = useState(() => parse?.receipt.purchased_at ?? '');
+  const [merchantAddress, setMerchantAddress] = useState(
+    () => parse?.receipt.merchant_address ?? ''
+  );
+
+  /**
+   * True when the model returned no date and the contract substituted today.
+   * Worth saying out loud: an assumed date looks exactly like a read one.
+   */
+  const [dateWasMissing] = useState(() => parse?.receipt.purchased_at_assumed ?? false);
 
   const lowConfidenceCount = useMemo(
     () => items.filter((item, index) => item.confidence === 'low' && !excluded.has(index)).length,
@@ -100,11 +114,24 @@ export default function ReviewScreen() {
   };
 
   const save = async () => {
+    // Caught here rather than by the repository, so the message names the field
+    // the user can see and nothing is attempted against the database.
+    if (!isValidLocalDate(purchasedAt)) {
+      Alert.alert('Check the date', 'The date must be a real calendar date, as YYYY-MM-DD.');
+      return;
+    }
+
     setSaving(true);
     try {
       const db = await getDb();
       const billId = await saveReviewedReceipt(db, {
-        receipt: { ...receipt, items },
+        receipt: {
+          ...receipt,
+          items,
+          purchased_at: purchasedAt,
+          // Blank means the receipt printed none, which is NULL, not "".
+          merchant_address: merchantAddress.trim() || null,
+        },
         correctedIndices: corrected,
         excludedIndices: excluded,
         capturePath: result.path,
@@ -134,7 +161,7 @@ export default function ReviewScreen() {
         <View style={styles.header}>
           <ThemedText type="title">{receipt.merchant ?? 'Unnamed merchant'}</ThemedText>
           <ThemedText themeColor="textSecondary">
-            {formatDate(receipt.purchased_at)}
+            {isValidLocalDate(purchasedAt) ? formatDate(purchasedAt) : purchasedAt || 'No date'}
             {receipt.purchased_time ? ` at ${receipt.purchased_time}` : ''}
           </ThemedText>
           <ThemedText type="amountLarge">
@@ -143,6 +170,32 @@ export default function ReviewScreen() {
         </View>
 
         <FlagBanner flags={parse.flags} />
+
+        {/* The two fields the parse gets wrong in ways the item list cannot
+            show: a date the receipt never printed, and an address one digit
+            out, which sends the §4.14 map preview to the wrong street. */}
+        <View style={styles.details}>
+          <TextField
+            label="Date"
+            value={purchasedAt}
+            onChangeText={setPurchasedAt}
+            placeholder="YYYY-MM-DD"
+            autoCapitalize="none"
+            autoCorrect={false}
+            hint={
+              dateWasMissing
+                ? 'This receipt printed no date, so today is assumed — change it if that is wrong.'
+                : undefined
+            }
+          />
+          <TextField
+            label="Store address"
+            value={merchantAddress}
+            onChangeText={setMerchantAddress}
+            placeholder="As printed on the receipt"
+            hint="Used to show the shop on a map. Leave blank if the receipt prints none."
+          />
+        </View>
 
         {__DEV__ && (
           <ThemedText type="small" themeColor="textSecondary">
@@ -355,6 +408,7 @@ function ReviewRow({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: Spacing.four, gap: Spacing.three, paddingBottom: Spacing.seven },
+  details: { gap: Spacing.three },
   header: { gap: Spacing.one },
   attention: {
     borderLeftWidth: 3,

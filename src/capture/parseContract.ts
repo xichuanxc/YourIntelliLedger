@@ -26,7 +26,7 @@ import {
   type Confidence,
   type Unit,
 } from '@/types/vocabulary';
-import { isValidLocalDate, isValidLocalTime } from '@/data/dates';
+import { isValidLocalDate, isValidLocalTime, todayLocalDate } from '@/data/dates';
 
 export interface ParsedItem {
   name: string;
@@ -46,6 +46,15 @@ export interface ParsedReceipt {
   merchant: string | null;
   merchant_address: string | null;
   purchased_at: string;
+  /**
+   * True when the receipt printed no date and `purchased_at` above is today's,
+   * assumed rather than read.
+   *
+   * Not part of the model's JSON — the validator sets it. An assumed date looks
+   * exactly like a read one on screen, so without this the review screen has no
+   * way to say which it is showing.
+   */
+  purchased_at_assumed?: boolean;
   purchased_time: string | null;
   currency: string;
   total_cents: number | null;
@@ -92,8 +101,21 @@ export function validateParsedReceipt(raw: unknown): ValidationResult {
     errors.push('`merchant_address` must be a string or null.');
   }
 
-  if (typeof raw.purchased_at !== 'string' || !isValidLocalDate(raw.purchased_at)) {
-    errors.push('`purchased_at` must be a real calendar date in the form YYYY-MM-DD.');
+  // A missing date is not a parse failure. Plenty of receipts do not print one,
+  // and thermal print fades from the top — which is where the date usually is.
+  // Rejecting the whole receipt over it burned §5.5's single retry and dropped
+  // the user into manual entry holding a perfectly good item list.
+  //
+  // Absent therefore means today, which is right far more often than not: a
+  // receipt is normally captured the day it is issued, and the review screen
+  // shows the date for correction before anything is stored (§5.6).
+  //
+  // A date that is *present but unreadable* stays an error. That is the model
+  // failing at something it was given, not something that was never there.
+  if (raw.purchased_at != null && raw.purchased_at !== '') {
+    if (typeof raw.purchased_at !== 'string' || !isValidLocalDate(raw.purchased_at)) {
+      errors.push('`purchased_at` must be a real calendar date in the form YYYY-MM-DD.');
+    }
   }
   if (
     raw.purchased_time !== null &&
@@ -144,7 +166,10 @@ export function validateParsedReceipt(raw: unknown): ValidationResult {
     value: {
       merchant: (raw.merchant as string | null) ?? null,
       merchant_address: (raw.merchant_address as string | null) ?? null,
-      purchased_at: raw.purchased_at as string,
+      // Absent → today. See the validation above for why this is a default
+      // rather than an error.
+      purchased_at: (raw.purchased_at as string | null) || todayLocalDate(),
+      purchased_at_assumed: !raw.purchased_at,
       purchased_time: (raw.purchased_time as string | null) ?? null,
       currency: (raw.currency as string) ?? 'NZD',
       total_cents: (raw.total_cents as number | null) ?? null,

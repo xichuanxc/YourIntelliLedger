@@ -222,6 +222,7 @@ describe('validateParsedReceipt (§5.5 #1)', () => {
   it('defaults the optional fields the prompt allows to omit', () => {
     const result = validateParsedReceipt({
       purchased_at: '2026-07-05',
+  purchased_at_assumed: false,
       items: [{ name: 'Milk', category: 'dairy' }],
     });
 

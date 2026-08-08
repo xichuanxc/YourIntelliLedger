@@ -19,8 +19,8 @@ import { formatMoney } from '@/data/money';
 import { clearQueryLog } from '@/data/telemetryRepo';
 import { clearGeocodeCache } from '@/maps/geocodeCache';
 import type { BillSummary } from '@/types/ledger';
-import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
+import { ClearDataIcon, LoadSamplesIcon } from '@/ui/components/dev-icons';
 import { GearIcon } from '@/ui/components/gear-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
@@ -58,14 +58,17 @@ export default function LedgerScreen() {
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <ThemedText type="title">Ledger</ThemedText>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-            hitSlop={12}
-            style={styles.headerButton}>
-            <GearIcon />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <DevTools />
+            <Pressable
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              hitSlop={12}
+              style={styles.headerButton}>
+              <GearIcon />
+            </Pressable>
+          </View>
         </View>
         <TextInput
           value={search}
@@ -80,7 +83,6 @@ export default function LedgerScreen() {
             { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border },
           ]}
         />
-        <DevTools />
       </View>
 
       {error ? (
@@ -179,17 +181,10 @@ function DevTools() {
   if (!__DEV__) return null;
 
   return (
-    <View style={styles.devToolsBlock}>
-      {/* The marker moved out of the labels: "(dev)" on each button wrapped
-          them onto two lines, and saying it once is clearer anyway. */}
-      <ThemedText type="small" themeColor="textSecondary">
-        Development only — not in release builds
-      </ThemedText>
-      <View style={styles.devTools}>
-        <DevSeedButton />
-        <DevClearButton />
-      </View>
-    </View>
+    <>
+      <DevSeedButton />
+      <DevClearButton />
+    </>
   );
 }
 
@@ -230,7 +225,17 @@ function DevSeedButton() {
     );
   };
 
-  return <Button label="Load samples" variant="secondary" onPress={run} busy={busy} style={styles.flex} />;
+  return (
+    <Pressable
+      onPress={run}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel="Load sample receipts (development only)"
+      hitSlop={8}
+      style={[styles.headerButton, busy && styles.busy]}>
+      <LoadSamplesIcon />
+    </Pressable>
+  );
 }
 
 /**
@@ -284,7 +289,17 @@ function DevClearButton() {
     );
   };
 
-  return <Button label="Clear all data" variant="danger" onPress={run} busy={busy} style={styles.flex} />;
+  return (
+    <Pressable
+      onPress={run}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityLabel="Clear all data (development only)"
+      hitSlop={8}
+      style={[styles.headerButton, busy && styles.busy]}>
+      <ClearDataIcon />
+    </Pressable>
+  );
 }
 
 /**
@@ -345,6 +360,7 @@ function AddBillAction() {
 const styles = StyleSheet.create({
   header: { padding: Spacing.four, gap: Spacing.three },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
   headerButton: {
     minWidth: MinTouchTarget,
     minHeight: MinTouchTarget,
@@ -358,9 +374,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     fontSize: 16,
   },
-  flex: { flex: 1 },
-  devToolsBlock: { gap: Spacing.two },
-  devTools: { flexDirection: 'row', gap: Spacing.three },
+  busy: { opacity: 0.4 },
   listContent: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.seven * 2 },
   emptyContainer: { flexGrow: 1 },
   sectionHeader: {

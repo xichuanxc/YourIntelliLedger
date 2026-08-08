@@ -6,6 +6,8 @@ import { buildPromptText } from '@/agent/byokTransport';
 import type { ParseRequest, ParseTransport } from '@/agent/parseTransport';
 import { ParseFailedError, parseReceipt } from '@/capture/parseReceipt';
 import { RECEIPT_PARSE_PROMPT } from '@/capture/prompts/receiptParseText';
+import { validateParsedReceipt } from '@/capture/parseContract';
+import { todayLocalDate } from '@/data/dates';
 
 const PROMPT = 'SYSTEM PROMPT';
 
@@ -312,5 +314,67 @@ describe('OCR correction guidance', () => {
 
     expect(text).toMatch(/Correcting the OCR text/);
     expect(text).toMatch(/previous answer was rejected/);
+  });
+});
+
+/**
+ * A missing date defaults to today rather than failing the parse.
+ *
+ * Plenty of receipts print no date, and thermal print fades from the top —
+ * which is where the date usually is. Rejecting the whole receipt for it
+ * burned §5.5's single retry and dropped the user into manual entry holding a
+ * perfectly good item list.
+ */
+describe('purchased_at when the receipt printed no date', () => {
+  const today = todayLocalDate();
+  const withoutDate = (value?: unknown) => {
+    const receipt: Record<string, unknown> = { ...goodReceipt };
+    delete receipt.purchased_at;
+    if (value !== undefined) receipt.purchased_at = value;
+    return validateParsedReceipt(receipt);
+  };
+
+  it('accepts a receipt with no purchased_at at all', () => {
+    const result = withoutDate();
+    expect(result.ok).toBe(true);
+  });
+
+  it('defaults it to today', () => {
+    const result = withoutDate();
+    expect(result.ok && result.value.purchased_at).toBe(today);
+  });
+
+  it('says the date was assumed, so the screen can label it', () => {
+    const result = withoutDate();
+    expect(result.ok && result.value.purchased_at_assumed).toBe(true);
+  });
+
+  it('treats null and empty string the same as absent', () => {
+    for (const value of [null, '']) {
+      const result = withoutDate(value);
+      expect(result.ok && result.value.purchased_at).toBe(today);
+      expect(result.ok && result.value.purchased_at_assumed).toBe(true);
+    }
+  });
+
+  it('does not claim a real date was assumed', () => {
+    const result = validateParsedReceipt(goodReceipt);
+    expect(result.ok && result.value.purchased_at).toBe('2026-07-05');
+    expect(result.ok && result.value.purchased_at_assumed).toBe(false);
+  });
+
+  /**
+   * The distinction that matters: absent is a receipt that never had one;
+   * unreadable is the model failing at something it was given.
+   */
+  it('still rejects a date that is present but not a date', () => {
+    const result = validateParsedReceipt({ ...goodReceipt, purchased_at: 'yesterday' });
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.errors.join(' ')).toMatch(/purchased_at/);
+  });
+
+  it('still rejects an impossible calendar date', () => {
+    const result = validateParsedReceipt({ ...goodReceipt, purchased_at: '2026-02-30' });
+    expect(result.ok).toBe(false);
   });
 });
