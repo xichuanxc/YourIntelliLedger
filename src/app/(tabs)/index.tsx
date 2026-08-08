@@ -21,6 +21,7 @@ import type { BillSummary } from '@/types/ledger';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { GearIcon } from '@/ui/components/gear-icon';
+import { PlusIcon } from '@/ui/components/plus-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -57,14 +58,28 @@ export default function LedgerScreen() {
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <ThemedText type="title">Ledger</ThemedText>
-          <Pressable
-            onPress={() => router.push('/settings')}
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-            hitSlop={12}
-            style={styles.gear}>
-            <GearIcon />
-          </Pressable>
+          <View style={styles.headerActions}>
+            {/* §7's primary action, iOS half: a header action. Android gets a
+                floating action button instead — see AddBillAction. */}
+            {Platform.OS !== 'android' && (
+              <Pressable
+                onPress={() => router.push('/capture')}
+                accessibilityRole="button"
+                accessibilityLabel="Add a bill"
+                hitSlop={12}
+                style={styles.headerButton}>
+                <PlusIcon />
+              </Pressable>
+            )}
+            <Pressable
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              hitSlop={12}
+              style={styles.headerButton}>
+              <GearIcon />
+            </Pressable>
+          </View>
         </View>
         <TextInput
           value={search}
@@ -288,39 +303,57 @@ function DevClearButton() {
 
 /**
  * The primary action is deliberately not unified (§7): a floating action
- * button on Android, a bottom-anchored button on iOS.
+ * button on Android, a header action on iOS (rendered up in the title row).
+ *
+ * ## Why iOS is not a bottom-anchored button
+ *
+ * §7 offers "header action / bottom-anchored button" for iOS, and this was
+ * the bottom button until it was seen on a device: UIKit's tab bar is
+ * translucent and the screen's content extends *underneath* it, so the button
+ * sat behind Ledger/Ask/Insights. Android does not have the problem — its tab
+ * bar is a sibling view below the content, not an overlay.
+ *
+ * Padding it clear would need the tab bar's height, and
+ * `expo-router/unstable-native-tabs` exposes no hook for it; hardcoding ~49pt
+ * would break under the tab bar's minimize behaviour and at larger text sizes.
+ * Stacking a full-width button directly above a tab bar is also poor iOS
+ * form — hence the header action, which §7 lists first for iOS anyway.
+ *
+ * This is exactly the defect class §7 warns about: "back-gesture handling and
+ * safe-area insets are not optional — they are the two most common
+ * cross-platform defects".
  */
 function AddBillAction() {
   const theme = useTheme();
-  // Capture is the primary way in now; manual entry is offered inside it.
-  const onPress = () => router.push('/capture');
 
-  if (Platform.OS === 'android') {
-    return (
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel="Add a bill"
-        style={({ pressed }) => [
-          styles.fab,
-          { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
-        ]}>
-        <ThemedText style={[styles.fabGlyph, { color: theme.textInverse }]}>+</ThemedText>
-      </Pressable>
-    );
-  }
+  // iOS renders its primary action in the header, so nothing goes here.
+  if (Platform.OS !== 'android') return null;
 
   return (
-    <View style={styles.bottomAction}>
-      <Button label="Add a bill" onPress={onPress} />
-    </View>
+    <Pressable
+      // Capture is the primary way in now; manual entry is offered inside it.
+      onPress={() => router.push('/capture')}
+      accessibilityRole="button"
+      accessibilityLabel="Add a bill"
+      style={({ pressed }) => [
+        styles.fab,
+        { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+      ]}>
+      <ThemedText style={[styles.fabGlyph, { color: theme.textInverse }]}>+</ThemedText>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   header: { padding: Spacing.four, gap: Spacing.three },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  gear: { minWidth: MinTouchTarget, minHeight: MinTouchTarget, alignItems: 'flex-end', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  headerButton: {
+    minWidth: MinTouchTarget,
+    minHeight: MinTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   search: {
     minHeight: MinTouchTarget,
     borderRadius: Radius.medium,
@@ -364,5 +397,4 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   fabGlyph: { fontSize: 30, lineHeight: 34, fontWeight: '400' },
-  bottomAction: { padding: Spacing.four, paddingBottom: Spacing.five },
 });
