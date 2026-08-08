@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getDb } from '@/data/db';
 import { getBlockScreenshots } from '@/data/prefs';
 import { applyScreenshotPolicy } from '@/data/screenPrivacy';
+import { LaunchScreen } from '@/ui/components/launch-screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useColorScheme } from '@/ui/hooks/use-color-scheme';
 import { Spacing } from '@/ui/theme';
@@ -19,6 +20,8 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const dark = colorScheme === 'dark';
   const [error, setError] = useState<Error | null>(null);
+  const [ready, setReady] = useState(false);
+  const [launching, setLaunching] = useState(true);
 
   useEffect(() => {
     // Open and migrate before anything renders: every screen below reads
@@ -26,9 +29,7 @@ export default function RootLayout() {
     // database is a crash, not a slow path.
     getDb()
       .catch(setError)
-      .finally(() => {
-        void SplashScreen.hideAsync();
-      });
+      .finally(() => setReady(true));
 
     // §8.2: the screenshot block is a stored preference, so it has to be
     // re-applied on every launch — the flag itself does not persist.
@@ -55,7 +56,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <ThemeProvider value={dark ? DarkTheme : DefaultTheme}>
-          <StatusBar style="auto" />
+          {/* The launch screen is navy in both schemes, so the status bar has
+              to be light while it is up regardless of the system setting. */}
+          <StatusBar style={launching ? 'light' : 'auto'} />
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="bill/new" options={{ title: 'New bill', presentation: 'modal' }} />
@@ -68,10 +71,29 @@ export default function RootLayout() {
             <Stack.Screen name="capture/review" options={{ title: 'Check this receipt' }} />
             <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
           </Stack>
+
+          {launching && (
+            <LaunchScreen
+              ready={ready}
+              onShown={hideNativeSplash}
+              onFinished={() => setLaunching(false)}
+            />
+          )}
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * Retires the OS splash the instant the launch screen has been laid out.
+ *
+ * Tying this to the database instead would leave a static PNG up for the whole
+ * of startup and play the entrance animation underneath it, unseen. Laying out
+ * first also means there is never a frame of bare app between the two.
+ */
+function hideNativeSplash() {
+  void SplashScreen.hideAsync();
 }
 
 const styles = StyleSheet.create({

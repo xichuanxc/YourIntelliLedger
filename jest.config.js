@@ -54,6 +54,13 @@ module.exports = {
       displayName: 'ui',
       preset: 'jest-expo/android',
       testMatch: ['<rootDir>/__tests__/**/*.test.tsx'],
+      // Reanimated 4 reaches its native worklets binding at import time, so
+      // merely importing a component that animates fails the suite with
+      // "Cannot read properties of undefined (reading 'loadUnpackers')".
+      // This resolver ships with the library for the purpose: it drops the
+      // `.native` extension for react-native-worklets so the JS
+      // implementation is resolved instead of the TurboModule one.
+      resolver: 'react-native-worklets/jest/resolver',
     },
   ],
 };

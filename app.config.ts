@@ -48,9 +48,16 @@ const config: ExpoConfig = {
     [
       'expo-splash-screen',
       {
-        backgroundColor: '#208AEF',
+        // The launch screen this hands over to (src/ui/components/launch-screen.tsx)
+        // draws the same mark at the same size on a gradient whose middle stop
+        // is this colour, so the handoff is invisible. Changing one without the
+        // other puts a visible cut in the first second of every launch.
+        //
+        // Dark mode gets no variant: the artwork is a night scene, so the
+        // launch sequence is deliberately dark in both schemes.
+        backgroundColor: '#11235F',
         image: './assets/images/splash-icon.png',
-        imageWidth: 76,
+        imageWidth: 132,
       },
     ],
     'expo-sqlite',
