@@ -60,7 +60,8 @@
     "lint": "expo lint",
     "test": "jest --selectProjects node && jest --selectProjects ui",
     "test:node": "jest --selectProjects node",
-    "test:ui": "jest --selectProjects ui"
+    "test:ui": "jest --selectProjects ui",
+    "prompt:build": "node ./scripts/build-prompt.js"
   },
   "private": true
 }
