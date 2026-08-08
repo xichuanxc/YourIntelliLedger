@@ -20,6 +20,8 @@
  * the response shape below would change.
  */
 
+import { addressQueries } from './addressQueries';
+
 export interface GeoPoint {
   lat: number;
   lon: number;
@@ -40,26 +42,45 @@ const USER_AGENT = 'YourIntelliLedger/0.1 (COMPX576 student project)';
 /** A preview is a nicety; it must not hold the screen up. */
 const TIMEOUT_MS = 8000;
 
+/** Nominatim's published ceiling is one request per second. */
+const MIN_INTERVAL_MS = 1100;
+
 export interface GeocodeOptions {
   /** Injected in tests. Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
   signal?: AbortSignal;
+  /** Overridden to 0 in tests, so they do not sit through the rate limiter. */
+  minIntervalMs?: number;
 }
 
 /**
- * Resolves a printed address.
+ * Resolves a printed address, trying `addressQueries`' ladder in order and
+ * taking the first that lands.
  *
- * Returns `null` when the address is simply not found — a normal outcome for
- * a half-legible thermal receipt, and one the caller shows as "no map" rather
+ * Returns `null` when no candidate is found — a normal outcome for a
+ * half-legible thermal receipt, and one the caller shows as "no map" rather
  * than as an error. Throws `GeocodeError` when the lookup itself failed, which
  * is a different thing: offline, rate-limited, or a changed response shape.
+ * A failure aborts the ladder rather than burning the remaining candidates on
+ * a service that is not answering.
  */
 export async function geocode(
   address: string,
-  { fetchImpl = fetch, signal }: GeocodeOptions = {}
+  options: GeocodeOptions = {}
 ): Promise<GeoPoint | null> {
-  const query = address.trim();
-  if (!query) return null;
+  for (const query of addressQueries(address)) {
+    const point = await search(query, options);
+    if (point) return point;
+  }
+
+  return null;
+}
+
+async function search(
+  query: string,
+  { fetchImpl = fetch, signal, minIntervalMs = MIN_INTERVAL_MS }: GeocodeOptions
+): Promise<GeoPoint | null> {
+  await rateLimit(minIntervalMs);
 
   const url = `${ENDPOINT}?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`;
 
@@ -94,6 +115,30 @@ export async function geocode(
   }
 
   return firstPoint(body);
+}
+
+/**
+ * Serialises every lookup this process makes and spaces them out.
+ *
+ * Per-call throttling would not be enough: opening two bills in quick
+ * succession, or one address walking its ladder, are both several requests
+ * that must still add up to one per second. The queue is a promise chain, and
+ * a failed link is swallowed so one error does not wedge every later lookup.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+let lastRequestAt = 0;
+
+function rateLimit(minIntervalMs: number): Promise<void> {
+  if (minIntervalMs <= 0) return Promise.resolve();
+
+  const turn = queue.then(async () => {
+    const wait = minIntervalMs - (Date.now() - lastRequestAt);
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastRequestAt = Date.now();
+  });
+
+  queue = turn.catch(() => undefined);
+  return turn;
 }
 
 /**

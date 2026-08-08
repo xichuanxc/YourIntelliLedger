@@ -24,9 +24,19 @@ function mmkv(): MMKV {
   return store;
 }
 
+/**
+ * Bumped whenever `addressQueries` changes what it will try.
+ *
+ * A cached miss is a statement about the query ladder, not about the world:
+ * three corpus addresses were cached as unresolvable, then became resolvable
+ * when the ladder learnt to strip shop-unit prefixes. Without this they would
+ * have stayed blank on every device that had already looked them up.
+ */
+const CACHE_VERSION = 2;
+
 /** Matches the key normalisation used for merchants (§4.8): case and spacing only. */
 function cacheKey(address: string): string {
-  return address.toLowerCase().replace(/\s+/g, ' ').trim();
+  return `v${CACHE_VERSION}:${address.toLowerCase().replace(/\s+/g, ' ').trim()}`;
 }
 
 export type CachedGeocode =
