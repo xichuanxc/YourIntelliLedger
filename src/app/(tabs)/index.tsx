@@ -13,7 +13,10 @@ import {
 import { seedCorpus } from '@/data/corpus';
 import { formatDate, formatMonth } from '@/data/dates';
 import { getDb } from '@/data/db';
+import { deleteAllBills } from '@/data/ledgerRepo';
 import { formatMoney } from '@/data/money';
+import { clearQueryLog } from '@/data/telemetryRepo';
+import { clearGeocodeCache } from '@/maps/geocodeCache';
 import type { BillSummary } from '@/types/ledger';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
@@ -76,7 +79,7 @@ export default function LedgerScreen() {
             { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border },
           ]}
         />
-        <DevSeedButton />
+        <DevTools />
       </View>
 
       {error ? (
@@ -161,38 +164,56 @@ function BillRow({ bill }: { bill: BillSummary }) {
 }
 
 /**
- * Loads the eleven-receipt prototype corpus, replacing whatever is stored.
+ * Development-only tools. `__DEV__` is false in release builds, so neither of
+ * these ships. The user-facing import and delete-all are §15.1 and §15.2, in
+ * Week 9, and they arrive together so there is always a backup first.
  *
- * Development only — `__DEV__` is false in release builds, so this never ships.
- * The user-facing import is §15.1, in Week 9. It confirms first because it
- * deletes every existing bill and there is no export to undo that yet.
+ * Two buttons rather than one because they are genuinely two operations, and
+ * each is now idempotent on its own terms: loading is additive, so it no
+ * longer destroys a receipt you captured by hand to test the parser, and
+ * clearing is the only thing that deletes. Loading twice gives you the corpus
+ * twice — clear first if you want exactly eleven.
  */
+function DevTools() {
+  if (!__DEV__) return null;
+
+  return (
+    <View style={styles.devToolsBlock}>
+      {/* The marker moved out of the labels: "(dev)" on each button wrapped
+          them onto two lines, and saying it once is clearer anyway. */}
+      <ThemedText type="small" themeColor="textSecondary">
+        Development only — not in release builds
+      </ThemedText>
+      <View style={styles.devTools}>
+        <DevSeedButton />
+        <DevClearButton />
+      </View>
+    </View>
+  );
+}
+
 function DevSeedButton() {
   const refresh = useLedgerStore((state) => state.refresh);
   const [busy, setBusy] = useState(false);
 
-  if (!__DEV__) return null;
-
   const run = () => {
     Alert.alert(
       'Load sample receipts?',
-      'This deletes every bill currently stored and loads the 11 prototype receipts. It cannot be undone.',
+      'Adds the 11 prototype receipts to whatever is already stored. Nothing is deleted — use Clear all data for that.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Replace',
-          style: 'destructive',
+          text: 'Load',
           onPress: async () => {
             setBusy(true);
             try {
               const db = await getDb();
-              const result = await seedCorpus(db, { replaceExisting: true });
+              const result = await seedCorpus(db);
               await refresh();
               Alert.alert(
                 'Sample data loaded',
                 `${result.billsInserted} bills, ${result.itemsInserted} items, ` +
-                  `${result.pagesInserted} pages of OCR text. ` +
-                  `${result.deleted} previous bill${result.deleted === 1 ? '' : 's'} removed.`
+                  `${result.pagesInserted} pages of OCR text.`
               );
             } catch (error) {
               Alert.alert(
@@ -208,9 +229,61 @@ function DevSeedButton() {
     );
   };
 
-  return (
-    <Button label="Load sample receipts (dev)" variant="secondary" onPress={run} busy={busy} />
-  );
+  return <Button label="Load samples" variant="secondary" onPress={run} busy={busy} style={styles.flex} />;
+}
+
+/**
+ * Empties the ledger and everything derived from it.
+ *
+ * "All data" is taken literally for anything that came off a receipt — the
+ * bills, their items and OCR pages by cascade, the coordinates cached from
+ * their addresses, and the local usage log. It deliberately does **not** touch
+ * settings: wiping the API key on every reset would make this unusable in the
+ * one situation it exists for.
+ */
+function DevClearButton() {
+  const refresh = useLedgerStore((state) => state.refresh);
+  const [busy, setBusy] = useState(false);
+
+  const run = () => {
+    Alert.alert(
+      'Clear all data?',
+      'Deletes every bill, its items and captured text, the cached map coordinates, and this month’s usage log. Your API key and settings are kept. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              const db = await getDb();
+              const deleted = await deleteAllBills(db);
+              await clearQueryLog(db);
+              // Coordinates are derived from bill addresses, so they are bill
+              // data — and a stale cached miss would outlive the bill that
+              // produced it (see geocodeCache's version note).
+              clearGeocodeCache();
+              await refresh();
+              Alert.alert(
+                'Cleared',
+                `${deleted} bill${deleted === 1 ? '' : 's'} deleted, along with their items and captured text.`
+              );
+            } catch (error) {
+              Alert.alert(
+                'Could not clear data',
+                error instanceof Error ? error.message : String(error)
+              );
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return <Button label="Clear all data" variant="danger" onPress={run} busy={busy} style={styles.flex} />;
 }
 
 /**
@@ -255,6 +328,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     fontSize: 16,
   },
+  flex: { flex: 1 },
+  devToolsBlock: { gap: Spacing.two },
+  devTools: { flexDirection: 'row', gap: Spacing.three },
   listContent: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.seven * 2 },
   emptyContainer: { flexGrow: 1 },
   sectionHeader: {
