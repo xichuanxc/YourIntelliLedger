@@ -1,4 +1,10 @@
-import { centsToInput, formatQuantity, parseCents } from '@/data/money';
+import {
+  centsToInput,
+  currencySymbol,
+  formatMoneyCompact,
+  formatQuantity,
+  parseCents,
+} from '@/data/money';
 
 describe('parseCents (spec §4.3 — integer cents only)', () => {
   it('parses plain and currency-prefixed decimals', () => {
@@ -69,5 +75,105 @@ describe('formatQuantity', () => {
   it('keeps weighed quantities honest', () => {
     expect(formatQuantity(0.605)).toBe('0.605');
     expect(formatQuantity(0.67)).toBe('0.67');
+  });
+});
+
+/**
+ * These simulate Hermes on iOS, because Node has a complete `Intl` and cannot
+ * reproduce the failure on its own — which is exactly why the bug shipped.
+ *
+ * The original `currencySymbol` called `formatToParts` unguarded. That works
+ * on Android, whose Hermes gets `Intl` from the platform, and throws
+ * `TypeError: undefined is not a function` on iOS, where it does not exist.
+ * It surfaced on the first-ever iPhone launch, reported by React against the
+ * tab layout — several frames above the chart axis label that actually called
+ * it.
+ */
+describe('currencySymbol on a degraded Intl (iOS Hermes)', () => {
+  const realNumberFormat = Intl.NumberFormat;
+
+  afterEach(() => {
+    Object.defineProperty(Intl, 'NumberFormat', {
+      value: realNumberFormat,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  const stubNumberFormat = (impl: unknown) => {
+    Object.defineProperty(Intl, 'NumberFormat', {
+      value: impl,
+      configurable: true,
+      writable: true,
+    });
+  };
+
+  it('uses formatToParts when it exists', () => {
+    expect(currencySymbol('NZD')).toBe('$');
+    expect(currencySymbol('GBP')).toBe('£');
+  });
+
+  it('recovers the symbol from a formatted zero when formatToParts is missing', () => {
+    stubNumberFormat(function () {
+      return { format: () => '$0.00' };
+    });
+
+    expect(currencySymbol('NZD')).toBe('$');
+  });
+
+  it('handles a locale that puts a non-breaking space between symbol and amount', () => {
+    stubNumberFormat(function () {
+      return { format: () => '0,00 €' };
+    });
+
+    expect(currencySymbol('EUR')).toBe('€');
+  });
+
+  it('falls back to the table when narrowSymbol itself throws', () => {
+    stubNumberFormat(function () {
+      throw new RangeError('Unsupported currencyDisplay');
+    });
+
+    expect(currencySymbol('GBP')).toBe('£');
+    expect(currencySymbol('JPY')).toBe('¥');
+  });
+
+  it('falls back when Intl is absent altogether', () => {
+    stubNumberFormat(undefined);
+    expect(currencySymbol('NZD')).toBe('$');
+  });
+
+  /** Legible-but-wrong beats blank on a chart axis. */
+  it('gives an unknown currency a dollar sign rather than nothing', () => {
+    stubNumberFormat(function () {
+      throw new RangeError('nope');
+    });
+
+    expect(currencySymbol('XYZ')).toBe('$');
+  });
+
+  it('never returns an empty string, whatever Intl does', () => {
+    stubNumberFormat(function () {
+      return { format: () => '0.00' }; // symbol-less output
+    });
+
+    expect(currencySymbol('NZD')).toBe('$');
+  });
+});
+
+/** The caller that actually broke: chart axis labels on Insights. */
+describe('formatMoneyCompact', () => {
+  it('shortens thousands and millions for an axis gutter', () => {
+    expect(formatMoneyCompact(123450000)).toBe('$1.2m');
+    expect(formatMoneyCompact(1234500)).toBe('$12.3k');
+    expect(formatMoneyCompact(12345)).toBe('$123');
+  });
+
+  it('keeps the sign on the outside of the symbol', () => {
+    expect(formatMoneyCompact(-1234500)).toBe('-$12.3k');
+  });
+
+  it('renders a zero axis label rather than an empty one', () => {
+    expect(formatMoneyCompact(0)).toBe('$0');
   });
 });

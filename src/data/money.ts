@@ -76,14 +76,61 @@ export function formatMoneyCompact(cents: number, currency = 'NZD'): string {
   return `${sign}${symbol}${magnitude}`;
 }
 
-/** The locale's symbol for a currency, e.g. `'NZD'` → `'$'`. */
+/**
+ * Last resort when `Intl` cannot answer. Only the currencies this app is
+ * likely to meet; anything else falls through to a dollar sign, which may be
+ * wrong but is legible — better than a blank axis label or a crash.
+ */
+const SYMBOL_FALLBACK: Record<string, string> = {
+  NZD: '$',
+  AUD: '$',
+  USD: '$',
+  GBP: '£',
+  EUR: '€',
+  JPY: '¥',
+  CNY: '¥',
+};
+
+/**
+ * The locale's symbol for a currency, e.g. `'NZD'` → `'$'`.
+ *
+ * ## Why this is three attempts deep
+ *
+ * **`formatToParts` does not exist in Hermes on iOS.** Android's Hermes gets
+ * `Intl` from the platform, so the original one-liner worked there and looked
+ * finished. The first launch on an iPhone threw
+ * `TypeError: undefined is not a function`, and React attributed it to the tab
+ * layout several frames above the real cause — the chart axis labels on
+ * Insights. Exactly the §2.2 class of bug that only a second platform finds.
+ *
+ * So: ask precisely where that is supported, otherwise recover the symbol from
+ * a formatted zero, otherwise use the table. `currencyDisplay: 'narrowSymbol'`
+ * is itself not universally implemented and can throw, so the whole thing is
+ * wrapped rather than just the `formatToParts` call.
+ */
 export function currencySymbol(currency = 'NZD'): string {
-  const parts = new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    currencyDisplay: 'narrowSymbol',
-  }).formatToParts(0);
-  return parts.find((part) => part.type === 'currency')?.value ?? '$';
+  try {
+    const formatter = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    });
+
+    if (typeof formatter.formatToParts === 'function') {
+      const symbol = formatter.formatToParts(0).find((part) => part.type === 'currency')?.value;
+      if (symbol) return symbol;
+    }
+
+    // Strip a formatted zero down to its non-numeric remainder: digits,
+    // separators, and the non-breaking and narrow no-break spaces some locales
+    // put between symbol and amount.
+    const stripped = formatter.format(0).replace(/[\d\s.,  ]/g, '');
+    if (stripped) return stripped;
+  } catch {
+    // Intl missing, or the option unsupported — fall through to the table.
+  }
+
+  return SYMBOL_FALLBACK[currency.toUpperCase()] ?? '$';
 }
 
 /**
