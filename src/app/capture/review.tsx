@@ -72,11 +72,31 @@ export default function ReviewScreen() {
 
   const editItem = (index: number, patch: Partial<ParsedItem>) => {
     setItems((current) =>
-      current.map((item, i) => (i === index ? { ...item, ...patch } : item))
+      current.map((item, i) =>
+        i === index
+          ? // Editing a line *is* reviewing it, so it stops being low
+            // confidence. That field records how sure the *model* was; once a
+            // person has read the line and changed it, the model's reading is
+            // no longer what is on file. Leaving it low would give the bill a
+            // "needs review" flag that no amount of reviewing could clear.
+            { ...item, ...patch, confidence: 'high' as const }
+          : item
+      )
     );
     // Only a real change counts as a correction — this is the corpus a future
     // parse_corrections table is built from (§4.11).
     setCorrected((current) => new Set(current).add(index));
+  };
+
+  /**
+   * The other way a low-confidence line resolves: the user reads it, finds
+   * nothing wrong, and says so. Not a correction — nothing changed — so it
+   * does not join the `corrected` set.
+   */
+  const confirmItem = (index: number) => {
+    setItems((current) =>
+      current.map((item, i) => (i === index ? { ...item, confidence: 'high' as const } : item))
+    );
   };
 
   const save = async () => {
@@ -189,6 +209,7 @@ export default function ReviewScreen() {
                   })
                 }
                 onEdit={(patch) => editItem(index, patch)}
+                onConfirm={() => confirmItem(index)}
               />
             ))}
           </>
@@ -229,6 +250,7 @@ function ReviewRow({
   onToggleExpanded,
   onToggleExcluded,
   onEdit,
+  onConfirm,
 }: {
   item: ParsedItem;
   index: number;
@@ -239,6 +261,7 @@ function ReviewRow({
   onToggleExpanded: () => void;
   onToggleExcluded: () => void;
   onEdit: (patch: Partial<ParsedItem>) => void;
+  onConfirm: () => void;
 }) {
   const theme = useTheme();
   const lowConfidence = item.confidence === 'low';
@@ -313,6 +336,11 @@ function ReviewRow({
             value={item.category}
             onChange={(category) => onEdit({ category })}
           />
+          {/* Only offered while the line is still flagged. Once confirmed the
+              outline goes and there is nothing left to confirm. */}
+          {lowConfidence && (
+            <Button label="Looks right" variant="secondary" onPress={onConfirm} />
+          )}
           <Button
             label={excluded ? 'Include this line' : 'Remove this line'}
             variant={excluded ? 'secondary' : 'danger'}

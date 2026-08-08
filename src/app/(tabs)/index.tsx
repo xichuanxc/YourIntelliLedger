@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -21,7 +22,6 @@ import type { BillSummary } from '@/types/ledger';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { GearIcon } from '@/ui/components/gear-icon';
-import { PlusIcon } from '@/ui/components/plus-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -58,28 +58,14 @@ export default function LedgerScreen() {
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <ThemedText type="title">Ledger</ThemedText>
-          <View style={styles.headerActions}>
-            {/* §7's primary action, iOS half: a header action. Android gets a
-                floating action button instead — see AddBillAction. */}
-            {Platform.OS !== 'android' && (
-              <Pressable
-                onPress={() => router.push('/capture')}
-                accessibilityRole="button"
-                accessibilityLabel="Add a bill"
-                hitSlop={12}
-                style={styles.headerButton}>
-                <PlusIcon />
-              </Pressable>
-            )}
-            <Pressable
-              onPress={() => router.push('/settings')}
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-              hitSlop={12}
-              style={styles.headerButton}>
-              <GearIcon />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => router.push('/settings')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            hitSlop={12}
+            style={styles.headerButton}>
+            <GearIcon />
+          </Pressable>
         </View>
         <TextInput
           value={search}
@@ -302,32 +288,44 @@ function DevClearButton() {
 }
 
 /**
- * The primary action is deliberately not unified (§7): a floating action
- * button on Android, a header action on iOS (rendered up in the title row).
+ * A floating action button, on both platforms.
  *
- * ## Why iOS is not a bottom-anchored button
+ * §7 lists "floating action button" for Android and "header action /
+ * bottom-anchored button" for iOS. A FAB on iOS is a third thing, chosen
+ * because the same control in the same place on both is easier to use than a
+ * pedantic reading of the table, and §7's own note allows it: "using a single
+ * generic look on both platforms is acceptable for v1".
  *
- * §7 offers "header action / bottom-anchored button" for iOS, and this was
- * the bottom button until it was seen on a device: UIKit's tab bar is
- * translucent and the screen's content extends *underneath* it, so the button
- * sat behind Ledger/Ask/Insights. Android does not have the problem — its tab
- * bar is a sibling view below the content, not an overlay.
+ * ## Clearing the tab bar
  *
- * Padding it clear would need the tab bar's height, and
- * `expo-router/unstable-native-tabs` exposes no hook for it; hardcoding ~49pt
- * would break under the tab bar's minimize behaviour and at larger text sizes.
- * Stacking a full-width button directly above a tab bar is also poor iOS
- * form — hence the header action, which §7 lists first for iOS anyway.
+ * UIKit's tab bar is translucent and the screen's content runs *underneath*
+ * it, so anything anchored to the bottom of the screen on iOS is drawn in
+ * occupied space. Android has no such problem: its tab bar is a sibling view
+ * below the content.
  *
- * This is exactly the defect class §7 warns about: "back-gesture handling and
- * safe-area insets are not optional — they are the two most common
- * cross-platform defects".
+ * `expo-router/unstable-native-tabs` exposes no tab-bar-height hook, so the
+ * offset below is arithmetic over a known constant. That was not good enough
+ * for the full-width button this replaces — getting it wrong there meant a
+ * control that was completely invisible — but a FAB fails softly: a wrong
+ * constant moves it a few points, it never disappears. Different stakes,
+ * different answer.
  */
+
+/**
+ * UIKit's standard tab bar, excluding the home indicator area, which
+ * `useSafeAreaInsets` reports separately and which is 0 on a device without
+ * one (an iPhone SE, for instance).
+ */
+const IOS_TAB_BAR_HEIGHT = 49;
+
 function AddBillAction() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
 
-  // iOS renders its primary action in the header, so nothing goes here.
-  if (Platform.OS !== 'android') return null;
+  const bottom =
+    Platform.OS === 'android'
+      ? Spacing.five
+      : insets.bottom + IOS_TAB_BAR_HEIGHT + Spacing.four;
 
   return (
     <Pressable
@@ -337,7 +335,7 @@ function AddBillAction() {
       accessibilityLabel="Add a bill"
       style={({ pressed }) => [
         styles.fab,
-        { backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
+        { bottom, backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
       ]}>
       <ThemedText style={[styles.fabGlyph, { color: theme.textInverse }]}>+</ThemedText>
     </Pressable>
@@ -347,7 +345,6 @@ function AddBillAction() {
 const styles = StyleSheet.create({
   header: { padding: Spacing.four, gap: Spacing.three },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   headerButton: {
     minWidth: MinTouchTarget,
     minHeight: MinTouchTarget,
@@ -388,7 +385,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: Spacing.four,
-    bottom: Spacing.five,
     width: 56,
     height: 56,
     borderRadius: 28,

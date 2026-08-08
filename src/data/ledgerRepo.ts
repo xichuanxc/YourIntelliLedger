@@ -497,6 +497,41 @@ export async function deleteAllBills(db: SqlDriver): Promise<number> {
 }
 
 /**
+ * Marks every low-confidence line on a bill as checked, then recomputes the
+ * §4.11 flags.
+ *
+ * ## Why this exists, and why only this flag
+ *
+ * `low_confidence` was unclearable. It is raised when any item has
+ * `confidence = 'low'`, flags are recomputed on every write — but nothing in
+ * the app could *change* an item's confidence after the parse. So a bill
+ * marked "needs review" stayed marked however carefully it was reviewed. The
+ * label asked for an action the app did not offer.
+ *
+ * `confidence` records how sure the **model** was. A person reading the line
+ * and vouching for it supersedes that, which is why this is not the "silent
+ * correction" §4.11 forbids: no amount, name or category is touched — only
+ * the record of who last stood behind them.
+ *
+ * The other flags are deliberately not clearable this way. `sum_mismatch`,
+ * `missing_price` and `unit_mismatch` are claims about the numbers, and they
+ * clear by fixing the numbers. Dismissing one would destroy the evidence it
+ * exists to preserve.
+ *
+ * Returns how many lines were confirmed; 0 when there was nothing to do.
+ */
+export async function confirmLowConfidenceItems(db: SqlDriver, billId: number): Promise<number> {
+  return db.transaction(async (tx) => {
+    const result = await tx.run(
+      "UPDATE bill_items SET confidence = 'high' WHERE bill_id = ? AND confidence = 'low'",
+      [billId]
+    );
+    await recomputeParseFlags(tx, billId);
+    return result.changes;
+  });
+}
+
+/**
  * Replaces the cached OCR text for a bill (§4.6).
  *
  * Pages are stored 1-based in capture order, so a long supermarket receipt

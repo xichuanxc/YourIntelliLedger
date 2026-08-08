@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -7,6 +7,12 @@ import { Radius, Spacing } from '@/ui/theme';
 
 export interface FlagBannerProps {
   flags: readonly ParseFlag[];
+  /**
+   * Shown only when `low_confidence` is present, and only if supplied. The
+   * other flags are claims about the numbers and clear by fixing them — see
+   * `confirmLowConfidenceItems` for why the distinction matters.
+   */
+  onConfirmReviewed?: () => void;
 }
 
 /**
@@ -16,9 +22,11 @@ export interface FlagBannerProps {
  * stay exactly as recorded. A banner that silently "fixed" the total would
  * destroy the evidence that the parse was unreliable.
  */
-export function FlagBanner({ flags }: FlagBannerProps) {
+export function FlagBanner({ flags, onConfirmReviewed }: FlagBannerProps) {
   const theme = useTheme();
   if (flags.length === 0) return null;
+
+  const canConfirm = onConfirmReviewed !== undefined && flags.includes('low_confidence');
 
   return (
     <View
@@ -29,6 +37,20 @@ export function FlagBanner({ flags }: FlagBannerProps) {
           {PARSE_FLAG_LABELS[flag]}
         </ThemedText>
       ))}
+
+      {canConfirm && (
+        <Pressable
+          onPress={onConfirmReviewed}
+          accessibilityRole="button"
+          accessibilityLabel="Mark these lines as checked"
+          accessibilityHint="Clears the low-confidence warning. Amounts are not changed."
+          hitSlop={8}
+          style={styles.confirm}>
+          <ThemedText type="smallBold" themeColor="primary">
+            I&apos;ve checked these
+          </ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -40,4 +62,5 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: Spacing.one,
   },
+  confirm: { alignSelf: 'flex-start', paddingVertical: Spacing.one, minHeight: 32, justifyContent: 'center' },
 });

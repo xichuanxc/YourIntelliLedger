@@ -137,26 +137,6 @@ export default function SettingsScreen() {
             hint="Which model reads receipts. Changing this changes accuracy and speed."
           />
 
-          <View style={styles.switchRow}>
-            <View style={styles.switchLabel}>
-              <ThemedText>Send the photo too</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                Normally only the text this device reads off the receipt is sent. Switch this on
-                and the photograph goes with it, and the model is told to trust the picture where
-                the two disagree — better on faint, creased or crowded receipts. It uses more
-                data, costs more per read, and takes longer.
-              </ThemedText>
-            </View>
-            <Switch
-              value={visionParse}
-              onValueChange={(value) => {
-                setVisionParse(value);
-                setVisionParsePref(value);
-              }}
-              accessibilityLabel="Send the receipt photo to the AI provider"
-            />
-          </View>
-
           {status && (
             <ThemedText type="small" themeColor="success">
               {status}
@@ -214,6 +194,29 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="Privacy">
+          {/* Grouped with the other "what leaves the device" switches rather
+              than in Reading receipts, where it sat above a Save button it has
+              nothing to do with — it writes immediately, like these two. */}
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Send the receipt photo</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Normally only the text this device reads off a receipt is sent. Switch this on and
+                the photograph goes too, and the model is told to trust the picture where the two
+                disagree — better on faint, creased or crowded receipts. Slower, more data, and
+                more cost per read.
+              </ThemedText>
+            </View>
+            <Switch
+              value={visionParse}
+              onValueChange={(value) => {
+                setVisionParse(value);
+                setVisionParsePref(value);
+              }}
+              accessibilityLabel="Send the receipt photo to the AI provider"
+            />
+          </View>
+
           <View style={styles.switchRow}>
             <View style={styles.switchLabel}>
               <ThemedText>Block screenshots</ThemedText>

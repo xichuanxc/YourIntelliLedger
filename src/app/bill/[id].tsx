@@ -13,7 +13,7 @@ import {
 
 import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
-import { deleteBill, getBill } from '@/data/ledgerRepo';
+import { confirmLowConfidenceItems, deleteBill, getBill } from '@/data/ledgerRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
 import { getMapPreviews } from '@/data/prefs';
 import type { BillItem, BillWithItems } from '@/types/ledger';
@@ -111,7 +111,17 @@ export default function BillDetailScreen() {
           <ThemedText type="amountLarge">{formatMoney(bill.totalCents, bill.currency)}</ThemedText>
         </View>
 
-        <FlagBanner flags={bill.parseFlags} />
+        <FlagBanner
+          flags={bill.parseFlags}
+          onConfirmReviewed={async () => {
+            const db = await getDb();
+            await confirmLowConfidenceItems(db, billId);
+            setBill(await getBill(db, billId));
+            // The ledger row draws "Needs review" from the same flags, so it
+            // has to be told too or the list disagrees with the bill.
+            await refresh();
+          }}
+        />
 
         {bill.merchantAddress && (
           <AddressCard address={bill.merchantAddress} />

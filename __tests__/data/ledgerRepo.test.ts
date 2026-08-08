@@ -15,6 +15,7 @@ import {
   listLedger,
   updateBill,
   updateBillItem,
+  confirmLowConfidenceItems,
 } from '@/data/ledgerRepo';
 import { migrate } from '@/data/migrate';
 import type { NewBillInput } from '@/types/ledger';
@@ -417,5 +418,133 @@ describe('listing and search', () => {
     await migrate(empty);
     expect(await listLedger(empty)).toEqual([]);
     await empty.close();
+  });
+});
+
+/**
+ * Clearing "needs review" (§4.11).
+ *
+ * `low_confidence` was unclearable: it is raised when any item has
+ * `confidence = 'low'`, flags recompute on every write, but nothing could
+ * change an item's confidence after the parse. A bill marked "needs review"
+ * stayed marked however carefully it was reviewed.
+ *
+ * The line these tests hold is *which* flags may clear this way. Confidence
+ * records how sure the model was, and a person vouching for a line supersedes
+ * that. The numeric flags are claims about the numbers and must survive.
+ */
+describe('confirmLowConfidenceItems', () => {
+  /** Local factory: this file's shared fixture has no low-confidence lines. */
+  const bill = (overrides: Partial<NewBillInput>): NewBillInput => ({
+    merchant: 'New World',
+    purchasedAt: '2026-07-19',
+    totalCents: 1000,
+    source: 'receipt',
+    ...overrides,
+  });
+
+  it('clears low_confidence once every line has been vouched for', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 1000,
+        items: [
+          { name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' },
+          { name: 'Clear', category: 'dairy', priceCents: 600, confidence: 'high' },
+        ],
+      })
+    );
+
+    expect((await getBill(db, billId))!.parseFlags).toContain('low_confidence');
+
+    const confirmed = await confirmLowConfidenceItems(db, billId);
+
+    expect(confirmed).toBe(1);
+    expect((await getBill(db, billId))!.parseFlags).not.toContain('low_confidence');
+  });
+
+  /** No amount, name or category may move — only who last stood behind them. */
+  it('changes no values, only the confidence', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 400,
+        items: [{ name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' }],
+      })
+    );
+
+    const before = (await getBill(db, billId))!;
+    await confirmLowConfidenceItems(db, billId);
+    const after = (await getBill(db, billId))!;
+
+    expect(after.totalCents).toBe(before.totalCents);
+    expect(after.items[0].name).toBe('Smudged');
+    expect(after.items[0].priceCents).toBe(400);
+    expect(after.items[0].category).toBe('dairy');
+  });
+
+  /**
+   * The important one. A sum that does not add up is a fact about the numbers,
+   * not an opinion about legibility — dismissing it would destroy the evidence
+   * §4.11 exists to keep.
+   */
+  it('leaves sum_mismatch alone', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 9999,
+        items: [{ name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' }],
+      })
+    );
+
+    await confirmLowConfidenceItems(db, billId);
+    const flags = (await getBill(db, billId))!.parseFlags;
+
+    expect(flags).toContain('sum_mismatch');
+    expect(flags).not.toContain('low_confidence');
+  });
+
+  it('leaves missing_price alone', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 400,
+        items: [{ name: 'Illegible', category: 'dairy', priceCents: null, confidence: 'low' }],
+      })
+    );
+
+    await confirmLowConfidenceItems(db, billId);
+    const flags = (await getBill(db, billId))!.parseFlags;
+
+    expect(flags).toContain('missing_price');
+    expect(flags).not.toContain('low_confidence');
+  });
+
+  it('is a no-op on a bill with nothing to confirm', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 400,
+        items: [{ name: 'Clear', category: 'dairy', priceCents: 400, confidence: 'high' }],
+      })
+    );
+
+    expect(await confirmLowConfidenceItems(db, billId)).toBe(0);
+    expect((await getBill(db, billId))!.parseFlags).toEqual([]);
+  });
+
+  it('touches only the bill it was given', async () => {
+    const target = await createBill(
+      db,
+      bill({ totalCents: 400, items: [{ name: 'A', category: 'dairy', priceCents: 400, confidence: 'low' }] })
+    );
+    const other = await createBill(
+      db,
+      bill({ totalCents: 400, items: [{ name: 'B', category: 'dairy', priceCents: 400, confidence: 'low' }] })
+    );
+
+    await confirmLowConfidenceItems(db, target);
+
+    expect((await getBill(db, other))!.parseFlags).toContain('low_confidence');
   });
 });
