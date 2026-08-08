@@ -81,6 +81,10 @@ const config: ExpoConfig = {
     // §1.1 ABI list. android/gradle.properties is generated and gitignored, so
     // these cannot live there.
     './plugins/with-android-build-props',
+
+    // Local plugin (§2.3): the Apple development team, which ios/ would
+    // otherwise lose on every regenerate. Override with APPLE_TEAM_ID.
+    './plugins/with-ios-signing',
   ],
   experiments: {
     typedRoutes: true,
