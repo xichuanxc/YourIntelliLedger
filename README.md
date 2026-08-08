@@ -11,7 +11,8 @@ section references throughout the code (`§4.4`, `§5.1`, …) point into it.
 |---|---|---|
 | Node | 20+ | Must be on the PATH of whatever launches the build — see [Android Studio](#android-studio) |
 | **JDK** | **17** (Temurin or equivalent) | **Not whatever is newest.** JDK 26 fails the current AGP's `jlink`/`androidJdkImage` step outright, and takes `react-native-svg` and `react-native-masked-view` down with it — a failure that reads like a New Architecture problem but isn't (spec §1.1, §12 item 1). |
-| Xcode | latest | iOS builds only — **not yet installed on this machine**, so the iOS half of §12 item 1 is unverified |
+| Xcode | 26+ | iOS builds. Point `xcode-select` at `Xcode.app`, not the Command Line Tools, and re-accept the licence after each Xcode update — both surface as unrelated-looking errors. |
+| **Project path** | **no spaces anywhere above the repo** | See [iOS](#ios). This is not a preference; two separate packages break on it. |
 
 `npm run android` pins `JAVA_HOME` to JDK 17 automatically via
 [`scripts/with-jdk17.js`](./scripts/with-jdk17.js), so the pin survives
@@ -38,6 +39,53 @@ npm run android      # or: npm run ios
 | `npm run lint` | ESLint |
 | `npm test` | Jest, both projects |
 | `npm run check:gradle` | Fail if the Gradle wrapper has drifted (runs automatically before `npm run android`) |
+
+## iOS
+
+Verified on a physical iPhone SE (3rd gen), iOS 26.5.2, Xcode 26.6: builds,
+signs, installs and runs. The ML Kit pods resolve at **GoogleMLKit 8.0.0**
+with every script variant the §3 gate needs — Chinese, Japanese, Korean and
+Devanagari — which closes the compile-and-link half of §12 item 1.
+
+```bash
+npx expo prebuild --platform ios   # generates ios/ and runs pod install
+npm run ios                        # or: npx expo run:ios --device <udid>
+```
+
+**The project path must not contain a space.** This cost a full debugging
+cycle and is worth stating plainly. Two independent packages interpolate the
+project path into a shell command without quoting it:
+
+- `expo-constants` — `bash -l -c "$PODS_TARGET_SRCROOT/../scripts/…"`
+- **React Native itself** — backticks around `"$NODE_BINARY" --print …` in the
+  *Bundle React Native code and images* phase
+
+Either one fails with `bash: /Users/…/COMPX576: No such file or directory`,
+which Xcode reports only as `Command PhaseScriptExecution failed with a
+nonzero exit code` — pointing at the build system rather than at the path.
+Everything else in the workspace quotes correctly, so it is tempting to patch
+the one that broke; that is how the second one gets found. The repo therefore
+lives at `COMPX576-Programming-Project`, hyphenated.
+
+**Signing.** [`plugins/with-ios-signing.js`](./plugins/with-ios-signing.js)
+sets the development team, because `ios/` is regenerated and a team chosen in
+Xcode's UI does not survive — the same trap as `android/gradle.properties`.
+Override with `APPLE_TEAM_ID` on another machine.
+
+On a **free** Apple account:
+
+- Push Notifications cannot be provisioned at all. This is why
+  `expo-notifications` was removed; it was unused, and the spec lists
+  notifications as a v2 hook.
+- Profiles last **seven days**. Rebuilding re-signs.
+- The first install on a device will not launch until the certificate is
+  trusted by hand: **Settings → General → VPN & Device Management →
+  Developer App → Trust**. The error otherwise names an "invalid code
+  signature", which sounds fatal and is not.
+
+**Do not filter a build's output until it has failed once.** Piping
+`xcodebuild` through `grep`/`head` returns *grep's* exit status and truncates
+the real message; that hid the actual signing error for two cycles here.
 
 ## Android Studio
 
@@ -304,11 +352,14 @@ against an AAB, which is worth doing before Week 10.
 - **Insights' "no bills in this period" empty state is untested on device** —
   every period in the current data contains bills, so that branch has only
   been reasoned about, not seen.
-- **iOS is entirely unverified.** Xcode is not installed on this machine, so
-  §11's Week 3 bar ("`expo prebuild` produces working iOS *and* Android
-  projects") is met on Android only, and the iOS half of §12 item 1 — App
-  Attest, VisionKit, ML Kit's iOS pod under the New Architecture — is still
-  open. Per §11, do not let this drift into a "port later" phase.
+- **iOS builds and runs, but nothing on it has been exercised.** §11's Week 3
+  bar ("`expo prebuild` produces working iOS *and* Android projects") is now
+  met on both, and ML Kit's iOS pod links under the New Architecture — but
+  that is the *compile* half of §12 item 1. Still unverified on iOS: the
+  VisionKit document scanner, ML Kit OCR at runtime, the parse and review
+  flow, chart rendering, safe areas on a notched device, dark mode, and App
+  Attest (§13.1), which has no implementation on either platform yet. Every
+  "on both platforms" acceptance line in §11 Weeks 4–6 remains open.
 - **Release builds are signed with the debug keystore.** Fine for demos; §9.2
   requires Play App Signing with the upload key in EAS credentials before any
   store release.
