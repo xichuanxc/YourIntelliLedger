@@ -1,0 +1,83 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 6688
+ },
+ "merchant": "The Warehouse",
+ "merchant_address": "Te Rapa, The Base Shopping Centre, Te Rapa Road, Te Rapa",
+ "purchased_at": "2026-07-18",
+ "purchased_time": "15:32",
+ "currency": "NZD",
+ "total_cents": 2537,
+ "discount_cents": 0,
+ "units_sold": 5,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Whittaker's Mini Slab Almond Gold Share Pack 12 Pack",
+   "name_local": null,
+   "category": "snacks",
+   "is_food": true,
+   "qty": 12,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 750,
+   "unit_price_cents": null,
+   "barcode": "9403142001514",
+   "confidence": "low"
+  },
+  {
+   "name": "Whittaker's Mini Slab Creamy Milk Share Pack 12 Pack",
+   "name_local": null,
+   "category": "snacks",
+   "is_food": true,
+   "qty": 12,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 750,
+   "unit_price_cents": null,
+   "barcode": "9403142001538",
+   "confidence": "low"
+  },
+  {
+   "name": "Nice Milk Bottles 250g",
+   "name_local": null,
+   "category": "snacks",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 299,
+   "unit_price_cents": null,
+   "barcode": "9401113253450",
+   "confidence": "high"
+  },
+  {
+   "name": "Nice Marshmallows 250g",
+   "name_local": null,
+   "category": "snacks",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 299,
+   "unit_price_cents": null,
+   "barcode": "9401113253474",
+   "confidence": "high"
+  },
+  {
+   "name": "The Natural Confectionery Co. Soft Jellies Fruit Salad",
+   "name_local": null,
+   "category": "snacks",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 439,
+   "unit_price_cents": null,
+   "barcode": "9310434005801",
+   "confidence": "high"
+  }
+ ]
+}

@@ -1,0 +1,57 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 7417
+ },
+ "merchant": "New World Rototuna",
+ "merchant_address": "44 Horsham Downs Road, Rototuna, Hamilton",
+ "purchased_at": "2026-07-05",
+ "purchased_time": "12:44",
+ "currency": "NZD",
+ "total_cents": 1202,
+ "discount_cents": 0,
+ "units_sold": 3,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Morning Fresh Dishwashing Liquid 400ml",
+   "name_local": null,
+   "category": "household",
+   "is_food": false,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 379,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Palmolive Foaming Hand Wash Lime & Mint 250ml",
+   "name_local": null,
+   "category": "household",
+   "is_food": false,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 219,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Anchor Milk Blue Top Plastic Bottle 2L",
+   "name_local": null,
+   "category": "dairy",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 604,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

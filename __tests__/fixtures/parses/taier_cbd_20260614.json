@@ -1,0 +1,17 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 4629
+ },
+ "merchant": "TAIER CBD",
+ "merchant_address": null,
+ "purchased_at": "2026-06-14",
+ "purchased_time": "13:15",
+ "currency": "NZD",
+ "total_cents": 15140,
+ "discount_cents": 0,
+ "units_sold": null,
+ "itemless": true,
+ "items": []
+}

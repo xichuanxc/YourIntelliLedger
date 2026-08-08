@@ -1,0 +1,57 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 6398
+ },
+ "merchant": "Wellmart",
+ "merchant_address": "21 Liverpool St. Hamilton",
+ "purchased_at": "2024-07-04",
+ "purchased_time": "11:25",
+ "currency": "NZD",
+ "total_cents": 797,
+ "discount_cents": 0,
+ "units_sold": 3,
+ "itemless": false,
+ "items": [
+  {
+   "name": "XLK Hot Pot Seasoning 80g",
+   "name_local": null,
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 199,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "YC Pickled Vege 208g",
+   "name_local": null,
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 199,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "XS Tofu w/ Soya Sauce",
+   "name_local": null,
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 399,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "low"
+  }
+ ]
+}

@@ -1,0 +1,44 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 5674
+ },
+ "merchant": "New World",
+ "merchant_address": "87 Thames St, Morrinsville",
+ "purchased_at": "2026-06-30",
+ "purchased_time": "17:21",
+ "currency": "NZD",
+ "total_cents": 639,
+ "discount_cents": 0,
+ "units_sold": 2,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Mandarin",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.48,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 240,
+   "unit_price_cents": 499,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Croissants Large 3PK",
+   "name_local": null,
+   "category": "bakery",
+   "is_food": true,
+   "qty": 3,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 399,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 7842
+ },
+ "merchant": "PAK'nSAVE Hill Street",
+ "merchant_address": "17 Mill Street, Hamilton",
+ "purchased_at": "2026-06-24",
+ "purchased_time": "18:33",
+ "currency": "NZD",
+ "total_cents": 2560,
+ "discount_cents": 0,
+ "units_sold": 7,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Bananas",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.67,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 245,
+   "unit_price_cents": 365,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Broccoli",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 199,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Carrots",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.35,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 70,
+   "unit_price_cents": 199,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Shanghai Bok Choy",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 249,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Pams Cheese Edam Slices 250g",
+   "name_local": null,
+   "category": "dairy",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 399,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Spaghetti Bolognese Meal",
+   "name_local": null,
+   "category": "frozen",
+   "is_food": true,
+   "qty": 2,
+   "unit": "pc",
+   "scan_units": 2,
+   "price_cents": 1398,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

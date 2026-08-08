@@ -1,0 +1,70 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 7095
+ },
+ "merchant": "Chemist Warehouse",
+ "merchant_address": "Shp So and 6s Centre Place 501 Victaria Slrdes Hamiten Central HAMILTON",
+ "purchased_at": "2026-06-20",
+ "purchased_time": "14:19",
+ "currency": "NZD",
+ "total_cents": 3547,
+ "discount_cents": 0,
+ "units_sold": 4,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Grin Floss Picks 80 Pack",
+   "name_local": null,
+   "category": "household",
+   "is_food": false,
+   "qty": 80,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 609,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "low"
+  },
+  {
+   "name": "Flixonase Allergy Health Nasal Spray 120 Doses",
+   "name_local": null,
+   "category": "other",
+   "is_food": false,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 2299,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Janola Power Bleach Eucalyptus 250g",
+   "name_local": null,
+   "category": "household",
+   "is_food": false,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 439,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Life Flight Charity Drive Donation",
+   "name_local": null,
+   "category": "other",
+   "is_food": false,
+   "qty": 1,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 200,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

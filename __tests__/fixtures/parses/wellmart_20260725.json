@@ -1,0 +1,96 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 6563
+ },
+ "merchant": "Wellmart",
+ "merchant_address": "27 Liverpool st. Hamilton",
+ "purchased_at": "2026-07-25",
+ "purchased_time": "14:41",
+ "currency": "NZD",
+ "total_cents": 1504,
+ "discount_cents": 0,
+ "units_sold": 7,
+ "itemless": false,
+ "items": [
+  {
+   "name": "MK Waterchestnut Drink",
+   "name_local": "康师傅竹蔗马蹄500毫升",
+   "category": "beverage",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 169,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Kwong Son Yangchun Noodles",
+   "name_local": "广信阳春面500克",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 499,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "CD Premium Ham Sausage",
+   "name_local": "春都王中王特级火腿肠200克",
+   "category": "meat",
+   "is_food": true,
+   "qty": 2,
+   "unit": "pack",
+   "scan_units": 2,
+   "price_cents": 499,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "FW Preserved Vege w/ Black Fungus",
+   "name_local": "鱼泉木耳榨菜80克",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 119,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "WJ Pickled Spicy & Hot Vege",
+   "name_local": "乌江麻辣红油榨菜80克",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 119,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "JXJ Hot Pickled Mustard",
+   "name_local": "吉香居牌榨菜80克",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 99,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

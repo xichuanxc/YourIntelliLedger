@@ -1,0 +1,44 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 5700
+ },
+ "merchant": "FRUIT CITY SUPERMARKET",
+ "merchant_address": "4 ENDERLEY AVENUE HAMILTON 3214",
+ "purchased_at": "2026-06-12",
+ "purchased_time": "08:07",
+ "currency": "NZD",
+ "total_cents": 1130,
+ "discount_cents": 0,
+ "units_sold": null,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Green Valley 2 Ltr",
+   "name_local": null,
+   "category": "dairy",
+   "is_food": true,
+   "qty": 2,
+   "unit": "pc",
+   "scan_units": 2,
+   "price_cents": 750,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Banana",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 1.09,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 380,
+   "unit_price_cents": 349,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

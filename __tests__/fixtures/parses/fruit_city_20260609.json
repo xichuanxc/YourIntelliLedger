@@ -1,0 +1,57 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 5587
+ },
+ "merchant": "Fruit City Supermarket",
+ "merchant_address": "4 Enderley Avenue, Hamilton 3214",
+ "purchased_at": "2026-06-09",
+ "purchased_time": "17:00",
+ "currency": "NZD",
+ "total_cents": 554,
+ "discount_cents": 0,
+ "units_sold": null,
+ "itemless": false,
+ "items": [
+  {
+   "name": "Small Green Capsicum",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 2,
+   "unit": "pc",
+   "scan_units": 2,
+   "price_cents": 300,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Table Carrots",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.3,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 30,
+   "unit_price_cents": 100,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "Tomatoes",
+   "name_local": null,
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.32,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 224,
+   "unit_price_cents": 699,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}

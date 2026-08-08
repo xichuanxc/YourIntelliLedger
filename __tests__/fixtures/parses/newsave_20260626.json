@@ -1,0 +1,109 @@
+{
+ "_meta": {
+  "provider": "gemini-text",
+  "model": "gemini-3.6-flash",
+  "tokens": 6335
+ },
+ "merchant": "NewSave",
+ "merchant_address": "130-136 Tzistram street,Hamilton",
+ "purchased_at": "2026-06-26",
+ "purchased_time": "10:05",
+ "currency": "NZD",
+ "total_cents": 2802,
+ "discount_cents": 0,
+ "units_sold": 7,
+ "itemless": false,
+ "items": [
+  {
+   "name": "ORANGE KUMARA (MED)",
+   "name_local": "橙番薯（中号）",
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.605,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 362,
+   "unit_price_cents": 599,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "NZ TOMATO",
+   "name_local": "N2西红柿",
+   "category": "produce",
+   "is_food": true,
+   "qty": 0.25,
+   "unit": "kg",
+   "scan_units": 1,
+   "price_cents": 225,
+   "unit_price_cents": 899,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "HBS INSTANT BEANCURD-CHILLI",
+   "name_local": "好巴食豆腐干山椒味95G",
+   "category": "snacks",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 249,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "WXZ BEANCURD-SPICY&HOT",
+   "name_local": "五贤斋豆腐干-麻辣味108G",
+   "category": "snacks",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 319,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "WANG BUCKWHEAT NOODLE",
+   "name_local": "王牌荞麦面300G",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 349,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "WOODLAND FREE RANGE EGGS",
+   "name_local": "WL8号走地鸡蛋10个装",
+   "category": "dairy",
+   "is_food": true,
+   "qty": 10,
+   "unit": "pc",
+   "scan_units": 1,
+   "price_cents": 599,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  },
+  {
+   "name": "GCHJ RICE DUMPLING ALKALINE WATER",
+   "name_local": "桂城华记豆沙枧水粽200G",
+   "category": "pantry_staple",
+   "is_food": true,
+   "qty": 1,
+   "unit": "pack",
+   "scan_units": 1,
+   "price_cents": 699,
+   "unit_price_cents": null,
+   "barcode": null,
+   "confidence": "high"
+  }
+ ]
+}
