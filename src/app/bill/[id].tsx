@@ -15,12 +15,14 @@ import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
 import { deleteBill, getBill } from '@/data/ledgerRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
+import { getMapPreviews } from '@/data/prefs';
 import type { BillItem, BillWithItems } from '@/types/ledger';
 import { CATEGORY_LABELS, UNIT_LABELS } from '@/types/vocabulary';
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
 import { FlagBanner } from '@/ui/components/flag-banner';
 import { MapPinIcon, NavigateIcon } from '@/ui/components/map-icons';
+import { MapPreview } from '@/ui/components/map-preview';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -30,7 +32,6 @@ import { Radius, Spacing } from '@/ui/theme';
 export default function BillDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const billId = Number(id);
-  const theme = useTheme();
   const refresh = useLedgerStore((state) => state.refresh);
 
   const [bill, setBill] = useState<BillWithItems | null>(null);
@@ -113,35 +114,7 @@ export default function BillDetailScreen() {
         <FlagBanner flags={bill.parseFlags} />
 
         {bill.merchantAddress && (
-          <View style={[styles.addressCard, { backgroundColor: theme.backgroundElement }]}>
-            <MapPinIcon />
-            <View style={styles.addressText}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Store address
-              </ThemedText>
-              <ThemedText>{bill.merchantAddress}</ThemedText>
-            </View>
-            {/* Compact rather than full-width: this is a secondary action on a
-                screen whose primary job is the bill itself. */}
-            <Pressable
-              onPress={() => openMaps(bill.merchantAddress!)}
-              accessibilityRole="button"
-              accessibilityLabel="Navigate to this store"
-              accessibilityHint="Opens the address in your maps app"
-              hitSlop={10}
-              style={({ pressed }) => [
-                styles.navigateButton,
-                {
-                  backgroundColor: pressed ? theme.backgroundSelected : theme.background,
-                  borderColor: theme.border,
-                },
-              ]}>
-              <NavigateIcon />
-              <ThemedText type="smallBold" themeColor="primary">
-                Navigate
-              </ThemedText>
-            </Pressable>
-          </View>
+          <AddressCard address={bill.merchantAddress} />
         )}
 
         <View style={styles.sectionHeader}>
@@ -188,6 +161,63 @@ export default function BillDetailScreen() {
         </View>
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * The address, a map behind it, and a way to navigate there (§4.14).
+ *
+ * The map is the optional half: it needs a coordinate, and a coordinate needs
+ * a network round-trip the rest of this screen does not. When it is switched
+ * off, or fails, or the address cannot be resolved, `MapPreview` renders
+ * nothing and this collapses back to the plain card.
+ */
+function AddressCard({ address }: { address: string }) {
+  const theme = useTheme();
+  const [width, setWidth] = useState(0);
+
+  // Read once, on mount: flipping the switch in Settings should take effect on
+  // the next bill opened, not repaint one already on screen.
+  const [previewsOn] = useState(getMapPreviews);
+
+  return (
+    <View
+      style={[styles.addressCard, { backgroundColor: theme.backgroundElement }]}
+      onLayout={(event) => setWidth(event.nativeEvent.layout.width - Spacing.four * 2)}>
+      {previewsOn && width > 0 && (
+        <MapPreview address={address} width={width} onPress={() => openMaps(address)} />
+      )}
+
+      <View style={styles.addressRow}>
+        <MapPinIcon />
+        <View style={styles.addressText}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Store address
+          </ThemedText>
+          <ThemedText>{address}</ThemedText>
+        </View>
+        {/* Compact rather than full-width: this is a secondary action on a
+            screen whose primary job is the bill itself. */}
+        <Pressable
+          onPress={() => openMaps(address)}
+          accessibilityRole="button"
+          accessibilityLabel="Navigate to this store"
+          accessibilityHint="Opens the address in your maps app"
+          hitSlop={10}
+          style={({ pressed }) => [
+            styles.navigateButton,
+            {
+              backgroundColor: pressed ? theme.backgroundSelected : theme.background,
+              borderColor: theme.border,
+            },
+          ]}>
+          <NavigateIcon />
+          <ThemedText type="smallBold" themeColor="primary">
+            Navigate
+          </ThemedText>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -259,12 +289,11 @@ const styles = StyleSheet.create({
   summary: { gap: Spacing.one },
   card: { borderRadius: Radius.medium, padding: Spacing.four, gap: Spacing.two },
   addressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.three,
     borderRadius: Radius.medium,
     padding: Spacing.four,
   },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   addressText: { flex: 1, gap: Spacing.half },
   navigateButton: {
     flexDirection: 'row',

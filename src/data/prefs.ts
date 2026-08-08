@@ -22,6 +22,8 @@ function mmkv(): MMKV {
 const KEYS = {
   /** §8.2 [A]: FLAG_SECURE, blocking screenshots and the recents preview. */
   blockScreenshots: 'privacy.blockScreenshots',
+  /** §4.14: whether the bill screen draws a map behind the store address. */
+  mapPreviews: 'privacy.mapPreviews',
 } as const;
 
 export function getBlockScreenshots(): boolean {
@@ -32,4 +34,16 @@ export function getBlockScreenshots(): boolean {
 
 export function setBlockScreenshots(value: boolean): void {
   mmkv().set(KEYS.blockScreenshots, value);
+}
+
+export function getMapPreviews(): boolean {
+  // On by default, because a blank grey box is not a feature anyone would go
+  // looking for a switch to enable. What it costs is one address at a time
+  // leaving the device, stated plainly in Settings — and turning it off
+  // restores §4.14's original property of no network at all.
+  return mmkv().getBoolean(KEYS.mapPreviews) ?? true;
+}
+
+export function setMapPreviews(value: boolean): void {
+  mmkv().set(KEYS.mapPreviews, value);
 }

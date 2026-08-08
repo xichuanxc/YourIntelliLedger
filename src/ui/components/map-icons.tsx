@@ -7,19 +7,39 @@ import { useTheme } from '@/ui/hooks/use-theme';
  * ships no icon font, and `react-native-svg` is already a dependency.
  */
 
-export function MapPinIcon({ size = 18, color }: { size?: number; color?: string }) {
+export function MapPinIcon({
+  size = 18,
+  color,
+  filled = false,
+}: {
+  size?: number;
+  color?: string;
+  /**
+   * Solid body with a white outline, for the pin that sits on map tiles — an
+   * outlined glyph disappears against a busy or dark patch of map.
+   */
+  filled?: boolean;
+}) {
   const theme = useTheme();
-  const stroke = color ?? theme.textSecondary;
+  const tint = color ?? theme.textSecondary;
 
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11z"
-        stroke={stroke}
-        strokeWidth={1.7}
+        stroke={filled ? '#FFFFFF' : tint}
+        strokeWidth={filled ? 1.4 : 1.7}
         strokeLinejoin="round"
+        fill={filled ? tint : 'none'}
       />
-      <Circle cx={12} cy={10} r={2.6} stroke={stroke} strokeWidth={1.7} />
+      <Circle
+        cx={12}
+        cy={10}
+        r={2.6}
+        stroke={filled ? '#FFFFFF' : tint}
+        strokeWidth={filled ? 1.6 : 1.7}
+        fill={filled ? tint : 'none'}
+      />
     </Svg>
   );
 }

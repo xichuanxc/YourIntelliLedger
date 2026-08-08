@@ -25,7 +25,12 @@ import {
   setByokModel,
 } from '@/agent/byokKey';
 import { getDb } from '@/data/db';
-import { getBlockScreenshots, setBlockScreenshots } from '@/data/prefs';
+import {
+  getBlockScreenshots,
+  getMapPreviews,
+  setBlockScreenshots,
+  setMapPreviews as setMapPreviewsPref,
+} from '@/data/prefs';
 import { applyScreenshotPolicy, SCREENSHOT_BLOCKING_SUPPORTED } from '@/data/screenPrivacy';
 import { getUsageForMonth, type UsageSummary } from '@/data/telemetryRepo';
 import { formatMonth } from '@/data/dates';
@@ -46,12 +51,14 @@ export default function SettingsScreen() {
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [blockShots, setBlockShots] = useState(false);
   const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
+  const [mapPreviews, setMapPreviews] = useState(true);
 
   useEffect(() => {
     void (async () => {
       setExisting(await getByokKey());
       setModel(await getByokModel());
       setBlockShots(getBlockScreenshots());
+      setMapPreviews(getMapPreviews());
     })();
   }, []);
 
@@ -97,9 +104,9 @@ export default function SettingsScreen() {
         <Section title="Reading receipts">
           <ThemedText type="small" themeColor="textSecondary">
             Reading a receipt sends its <ThemedText type="smallBold">text</ThemedText> to an AI
-            provider — never the photograph, and never your bills, totals or history. Everything
-            else stays on this device. Until the app ships its own service you supply a key, which
-            is kept in the device keystore.
+            provider — never the photograph, and never your bills, totals or history. Apart from
+            this and map previews below, nothing leaves the device. Until the app ships its own
+            service you supply a key, which is kept in the device keystore.
           </ThemedText>
 
           <ThemedText type="smallBold">
@@ -202,6 +209,25 @@ export default function SettingsScreen() {
               {screenshotNote}
             </ThemedText>
           )}
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Map previews</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Draws a map behind a bill&apos;s store address. Looking one up sends that address —
+                and nothing else — to OpenStreetMap when you open the bill. Turn this off and no
+                part of a bill ever leaves the device except receipt text you choose to read.
+              </ThemedText>
+            </View>
+            <Switch
+              value={mapPreviews}
+              onValueChange={(value) => {
+                setMapPreviews(value);
+                setMapPreviewsPref(value);
+              }}
+              accessibilityLabel="Map previews"
+            />
+          </View>
         </Section>
 
         <Section title="Not built yet">
