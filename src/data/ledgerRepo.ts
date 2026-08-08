@@ -230,6 +230,18 @@ export async function createBill(db: SqlDriver, input: NewBillInput): Promise<nu
     for (const [index, item] of items.entries()) {
       await insertItem(tx, billId, index + 1, item);
     }
+
+    // Same transaction as the bill and its items (§5.1's "DB write (single
+    // transaction)"), so a receipt can never be stored without the OCR text it
+    // was parsed from — which is what makes a Week 6 re-parse possible (§4.6).
+    for (const [index, ocrText] of (input.ocrPages ?? []).entries()) {
+      await tx.run('INSERT INTO receipt_scans (bill_id, page_no, ocr_text) VALUES (?, ?, ?)', [
+        billId,
+        index + 1,
+        ocrText,
+      ]);
+    }
+
     return billId;
   });
 }
@@ -546,7 +558,7 @@ async function insertItem(
       item.unitPriceCents ?? null,
       item.barcode ?? null,
       item.confidence ?? null,
-      0,
+      item.userCorrected ? 1 : 0,
       item.rawText ?? null,
     ]
   );

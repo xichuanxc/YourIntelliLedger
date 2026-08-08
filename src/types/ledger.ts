@@ -97,6 +97,12 @@ export interface NewBillInput {
   capturePath?: CapturePath | null;
   modelAlias?: string | null;
   items?: NewBillItemInput[];
+  /**
+   * Cached OCR text, one entry per page in capture order (§4.6). Written in
+   * the same transaction as the bill, so a receipt can never end up stored
+   * without the text it was parsed from.
+   */
+  ocrPages?: string[];
 }
 
 export interface NewBillItemInput {
@@ -112,6 +118,12 @@ export interface NewBillItemInput {
   barcode?: string | null;
   confidence?: Confidence | null;
   rawText?: string | null;
+  /**
+   * Set when the user changed this line on the review screen (§5.6). It is the
+   * corpus a future `parse_corrections` table (§4.11) would be built from, so
+   * it records a real correction, never a value that merely passed through.
+   */
+  userCorrected?: boolean;
 }
 
 /** Patch shape for editing a bill. Omitted keys are left alone. */

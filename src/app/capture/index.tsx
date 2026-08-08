@@ -84,6 +84,8 @@ export default function CaptureScreen() {
               router.replace('/bill/new');
             }}
           />
+          {/* Reading a receipt needs an API key until the hub exists (§8.2). */}
+          <Button label="Settings" variant="plain" onPress={() => router.push('/settings')} />
         </View>
       </View>
     </Screen>

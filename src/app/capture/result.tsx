@@ -22,7 +22,7 @@ import { Radius, Spacing } from '@/ui/theme';
 
 export default function CaptureResultScreen() {
   const theme = useTheme();
-  const { result, reset } = useCaptureStore();
+  const { result, reset, runParse, status, error } = useCaptureStore();
 
   if (!result) {
     return (
@@ -72,17 +72,31 @@ export default function CaptureResultScreen() {
           </View>
         ))}
 
+        {error && (
+          <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
+            {error}
+          </ThemedText>
+        )}
+
         <View style={styles.actions}>
           <Button
-            label="Capture another"
+            label="Read this receipt"
+            onPress={async () => {
+              if ((await runParse()) === 'parsed') router.replace('/capture/review');
+            }}
+            busy={status === 'parsing'}
+          />
+          <Button
+            label="Enter by hand instead"
             variant="secondary"
             onPress={() => {
               reset();
-              router.replace('/capture');
+              router.replace('/bill/new');
             }}
           />
           <Button
-            label="Done"
+            label="Discard"
+            variant="plain"
             onPress={() => {
               reset();
               router.dismissTo('/');

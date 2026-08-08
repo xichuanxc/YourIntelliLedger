@@ -58,6 +58,8 @@ export default function RootLayout() {
             {/* Full-screen: the camera overlay guidance in §5.2 needs the frame. */}
             <Stack.Screen name="capture/camera" options={{ headerShown: false }} />
             <Stack.Screen name="capture/result" options={{ title: 'Receipt text' }} />
+            <Stack.Screen name="capture/review" options={{ title: 'Check this receipt' }} />
+            <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
           </Stack>
         </ThemeProvider>
       </SafeAreaProvider>

@@ -11,7 +11,9 @@
 
 import { create } from 'zustand';
 
+import { createByokTransport } from '@/agent/byokTransport';
 import { processCapture, type CaptureResult } from '@/capture/pipeline';
+import { parseReceipt, type ParseOutcome } from '@/capture/parseReceipt';
 import {
   pickFromGallery,
   scanWithSystemScanner,
@@ -19,11 +21,20 @@ import {
 } from '@/capture/sources';
 import type { CapturePath } from '@/types/vocabulary';
 
-export type CaptureStatus = 'idle' | 'acquiring' | 'processing' | 'ready' | 'error';
+export type CaptureStatus =
+  | 'idle'
+  | 'acquiring'
+  | 'processing'
+  | 'ready'
+  | 'parsing'
+  | 'parsed'
+  | 'error';
 
 interface CaptureState {
   status: CaptureStatus;
   result: CaptureResult | null;
+  /** The parsed candidate. Never written to the database (§5.6). */
+  parse: ParseOutcome | null;
   error: string | null;
   /** Set when the primary scanner was unavailable and a fallback was used. */
   fellBackFromScanner: boolean;
@@ -31,16 +42,42 @@ interface CaptureState {
   runPipeline: (uris: string[], path: CapturePath) => Promise<void>;
   startScan: () => Promise<'done' | 'cancelled' | 'needs-camera-fallback'>;
   startGallery: () => Promise<'done' | 'cancelled'>;
+  runParse: () => Promise<'parsed' | 'failed'>;
   reset: () => void;
 }
 
 export const useCaptureStore = create<CaptureState>((set) => ({
   status: 'idle',
   result: null,
+  parse: null,
   error: null,
   fellBackFromScanner: false,
 
-  reset: () => set({ status: 'idle', result: null, error: null, fellBackFromScanner: false }),
+  reset: () =>
+    set({ status: 'idle', result: null, parse: null, error: null, fellBackFromScanner: false }),
+
+  /**
+   * Sends the reconstructed text to the model. Failure is not fatal — §5.5
+   * falls back to manual entry, so the error is surfaced and the raw text
+   * stays available rather than the capture being thrown away.
+   */
+  runParse: async () => {
+    const { result } = useCaptureStore.getState();
+    if (!result) return 'failed';
+
+    set({ status: 'parsing', error: null });
+    try {
+      const parse = await parseReceipt(createByokTransport(), result.text);
+      set({ parse, status: 'parsed' });
+      return 'parsed';
+    } catch (error) {
+      set({
+        status: 'error',
+        error: error instanceof Error ? error.message : 'The receipt could not be read.',
+      });
+      return 'failed';
+    }
+  },
 
   runPipeline: async (uris, path) => {
     if (uris.length === 0) {
