@@ -29,7 +29,9 @@ import {
   getBlockScreenshots,
   getMapPreviews,
   setBlockScreenshots,
+  getVisionParse,
   setMapPreviews as setMapPreviewsPref,
+  setVisionParse as setVisionParsePref,
 } from '@/data/prefs';
 import { applyScreenshotPolicy, SCREENSHOT_BLOCKING_SUPPORTED } from '@/data/screenPrivacy';
 import { getUsageForMonth, type UsageSummary } from '@/data/telemetryRepo';
@@ -52,6 +54,7 @@ export default function SettingsScreen() {
   const [blockShots, setBlockShots] = useState(false);
   const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
   const [mapPreviews, setMapPreviews] = useState(true);
+  const [visionParse, setVisionParse] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -59,6 +62,7 @@ export default function SettingsScreen() {
       setModel(await getByokModel());
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
+      setVisionParse(getVisionParse());
     })();
   }, []);
 
@@ -104,9 +108,9 @@ export default function SettingsScreen() {
         <Section title="Reading receipts">
           <ThemedText type="small" themeColor="textSecondary">
             Reading a receipt sends its <ThemedText type="smallBold">text</ThemedText> to an AI
-            provider — never the photograph, and never your bills, totals or history. Apart from
-            this and map previews below, nothing leaves the device. Until the app ships its own
-            service you supply a key, which is kept in the device keystore.
+            provider — and the photograph as well, if you switch that on below. Never your bills,
+            totals or history. Apart from this and map previews, nothing leaves the device. Until
+            the app ships its own service you supply a key, which is kept in the device keystore.
           </ThemedText>
 
           <ThemedText type="smallBold">
@@ -132,6 +136,26 @@ export default function SettingsScreen() {
             autoCorrect={false}
             hint="Which model reads receipts. Changing this changes accuracy and speed."
           />
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Send the photo too</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Normally only the text this device reads off the receipt is sent. Switch this on
+                and the photograph goes with it, and the model is told to trust the picture where
+                the two disagree — better on faint, creased or crowded receipts. It uses more
+                data, costs more per read, and takes longer.
+              </ThemedText>
+            </View>
+            <Switch
+              value={visionParse}
+              onValueChange={(value) => {
+                setVisionParse(value);
+                setVisionParsePref(value);
+              }}
+              accessibilityLabel="Send the receipt photo to the AI provider"
+            />
+          </View>
 
           {status && (
             <ThemedText type="small" themeColor="success">

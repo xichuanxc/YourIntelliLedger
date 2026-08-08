@@ -24,6 +24,8 @@ const KEYS = {
   blockScreenshots: 'privacy.blockScreenshots',
   /** §4.14: whether the bill screen draws a map behind the store address. */
   mapPreviews: 'privacy.mapPreviews',
+  /** Send the receipt photograph to the model, not only the OCR text (§5.1). */
+  visionParse: 'parse.vision',
 } as const;
 
 export function getBlockScreenshots(): boolean {
@@ -46,4 +48,17 @@ export function getMapPreviews(): boolean {
 
 export function setMapPreviews(value: boolean): void {
   mmkv().set(KEYS.mapPreviews, value);
+}
+
+export function getVisionParse(): boolean {
+  // Off by default, and this one is not a close call. §5.1's pipeline stops at
+  // text deliberately, and §0 puts only "per-question minimal payloads" on the
+  // wire — a photograph of a receipt is neither minimal nor text. Turning it on
+  // is a trade the user makes knowingly: better accuracy for the picture
+  // leaving the device.
+  return mmkv().getBoolean(KEYS.visionParse) ?? false;
+}
+
+export function setVisionParse(value: boolean): void {
+  mmkv().set(KEYS.visionParse, value);
 }

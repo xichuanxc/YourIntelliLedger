@@ -12,7 +12,10 @@
 import { create } from 'zustand';
 
 import { createByokTransport } from '@/agent/byokTransport';
+import type { ParseImage } from '@/agent/parseTransport';
+import { encodeImageBase64 } from '@/capture/image';
 import { getDb } from '@/data/db';
+import { getVisionParse } from '@/data/prefs';
 import { logQuery, type QueryLogEntry } from '@/data/telemetryRepo';
 import { processCapture, type CaptureResult } from '@/capture/pipeline';
 import { parseReceipt, type ParseOutcome } from '@/capture/parseReceipt';
@@ -22,6 +25,21 @@ import {
   ScannerUnavailableError,
 } from '@/capture/sources';
 import type { CapturePath } from '@/types/vocabulary';
+
+/**
+ * Encodes the normalised pages for a vision request, in page order.
+ *
+ * Sequential rather than `Promise.all`: each page holds a multi-megabyte
+ * base64 string, and decoding a whole multi-page receipt at once is how a
+ * low-end device (§8.4) runs out of memory mid-parse.
+ */
+async function encodePages(pages: CaptureResult['pages']): Promise<ParseImage[]> {
+  const images: ParseImage[] = [];
+  for (const page of pages) {
+    images.push({ base64: await encodeImageBase64(page.image.uri), mimeType: 'image/jpeg' });
+  }
+  return images;
+}
 
 export type CaptureStatus =
   | 'idle'
@@ -90,7 +108,12 @@ export const useCaptureStore = create<CaptureState>((set) => ({
     const startedAt = Date.now();
 
     try {
-      const parse = await parseReceipt(createByokTransport(), result.text);
+      // Read at parse time rather than at capture: the switch lives in
+      // Settings, and a user who just got a poor read may well go and turn it
+      // on before retrying.
+      const images = getVisionParse() ? await encodePages(result.pages) : undefined;
+
+      const parse = await parseReceipt(createByokTransport(), result.text, { images });
       set({ parse, status: 'parsed' });
 
       // §15.3: counters only, no content. `retry` when the first attempt was

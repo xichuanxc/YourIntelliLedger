@@ -15,7 +15,7 @@
 import { RECEIPT_PARSE_PROMPT } from '@/capture/prompts/receiptParseText';
 import { extractJson, validateParsedReceipt, type ParsedReceipt } from '@/capture/parseContract';
 import { runPostChecks, type ItemIssue } from '@/capture/postChecks';
-import type { ParseTransport } from '@/agent/parseTransport';
+import type { ParseImage, ParseTransport } from '@/agent/parseTransport';
 import type { ParseFlag } from '@/types/vocabulary';
 
 export interface ParseOutcome {
@@ -48,6 +48,12 @@ export class ParseFailedError extends Error {
 export interface ParseOptions {
   /** Overridable so tests can supply the prompt without the Metro asset loader. */
   prompt?: string;
+  /**
+   * Page photographs, when the user has opted into vision parsing. Passed
+   * straight through: this module orchestrates retries and validation and has
+   * no opinion about what the transport puts on the wire.
+   */
+  images?: readonly ParseImage[];
 }
 
 export async function parseReceipt(
@@ -63,6 +69,7 @@ export async function parseReceipt(
     const response = await transport.parseReceipt({
       prompt,
       ocrText,
+      images: options.images,
       priorErrors: attempt === 0 ? undefined : attempts[0],
     });
 

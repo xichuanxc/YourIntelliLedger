@@ -19,11 +19,27 @@
  * iOS.
  */
 
+/** One captured page, encoded for a vision request. */
+export interface ParseImage {
+  /** Base64 JPEG, with no `data:` prefix. */
+  base64: string;
+  mimeType: string;
+}
+
 export interface ParseRequest {
   /** The system prompt — §13.7 forwards it byte-for-byte, so the app owns it. */
   prompt: string;
   /** Reconstructed receipt text from §5.4. */
   ocrText: string;
+  /**
+   * The photographs themselves, when the user has turned vision parsing on.
+   *
+   * **Absent unless asked for.** §0 puts only "per-question minimal payloads"
+   * on the wire, and §5.1's pipeline deliberately stops at text — so sending a
+   * photograph is a departure the user opts into, not a default. Omitted here
+   * means the request is text-only and behaves exactly as it always has.
+   */
+  images?: readonly ParseImage[];
   /**
    * Validator errors from a rejected first attempt. §5.5 allows exactly one
    * retry, and the model needs to be told what was wrong to have any chance

@@ -148,3 +148,108 @@ describe('the generated prompt module', () => {
     expect(RECEIPT_PARSE_PROMPT).toBe(markdown);
   });
 });
+
+/**
+ * Vision parsing (Settings → "Send the photo too").
+ *
+ * The switch is off by default because §0 puts only "per-question minimal
+ * payloads" on the wire and §5.1's pipeline stops at text on purpose. What
+ * matters here is that the default really is text-only — a privacy setting
+ * that leaks when nobody asked is worse than not having one.
+ */
+describe('vision parsing', () => {
+  const image = { base64: 'AAAA', mimeType: 'image/jpeg' };
+
+  it('says nothing about photographs when none are sent', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'MILK 6.39' });
+    expect(text).not.toMatch(/photograph/i);
+  });
+
+  it('says nothing about photographs for an empty list', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'MILK 6.39', images: [] });
+    expect(text).not.toMatch(/photograph/i);
+  });
+
+  /**
+   * The OCR text still goes. It resolves small print a compressed JPEG loses,
+   * so the two disagree in both directions — but the photograph is the reason
+   * the user turned this on, so the prompt has to name it as the authority or
+   * a confidently garbled line can anchor the model against what it can see.
+   */
+  it('tells the model the photographs win where the two disagree', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'M1LK 6.89', images: [image] });
+
+    expect(text).toContain('M1LK 6.89');
+    expect(text).toMatch(/authoritative/i);
+    expect(text).toMatch(/trust the photographs/i);
+  });
+
+  it('counts the pages so the model knows how many to expect', () => {
+    expect(buildPromptText({ prompt: PROMPT, ocrText: '', images: [image] })).toContain(
+      '1 photograph'
+    );
+    expect(
+      buildPromptText({ prompt: PROMPT, ocrText: '', images: [image, image, image] })
+    ).toContain('3 photographs');
+  });
+
+  it('never puts the base64 in the prompt text — it travels as its own part', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'MILK', images: [image] });
+    expect(text).not.toContain('AAAA');
+  });
+
+  it('passes the images through parseReceipt to the transport untouched', async () => {
+    const seen: ParseRequest[] = [];
+    const transport: ParseTransport = {
+      name: 'stub',
+      parseReceipt: async (request) => {
+        seen.push(request);
+        return { text: JSON.stringify(goodReceipt), modelAlias: 'stub' };
+      },
+    };
+
+    await parseReceipt(transport, 'MILK 6.39', { prompt: PROMPT, images: [image] });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].images).toEqual([image]);
+  });
+
+  /** The default path must stay exactly as it was. */
+  it('sends no images when the caller supplies none', async () => {
+    const seen: ParseRequest[] = [];
+    const transport: ParseTransport = {
+      name: 'stub',
+      parseReceipt: async (request) => {
+        seen.push(request);
+        return { text: JSON.stringify(goodReceipt), modelAlias: 'stub' };
+      },
+    };
+
+    await parseReceipt(transport, 'MILK 6.39', { prompt: PROMPT });
+
+    expect(seen[0].images).toBeUndefined();
+  });
+
+  /** §5.5 allows one retry; the photographs have to survive it. */
+  it('keeps the images on the retry', async () => {
+    const seen: ParseRequest[] = [];
+    let call = 0;
+    const transport: ParseTransport = {
+      name: 'stub',
+      parseReceipt: async (request) => {
+        seen.push(request);
+        call += 1;
+        return {
+          text: call === 1 ? '{"merchant": 42}' : JSON.stringify(goodReceipt),
+          modelAlias: 'stub',
+        };
+      },
+    };
+
+    await parseReceipt(transport, 'MILK 6.39', { prompt: PROMPT, images: [image] });
+
+    expect(seen).toHaveLength(2);
+    expect(seen[1].images).toEqual([image]);
+    expect(seen[1].priorErrors?.length).toBeGreaterThan(0);
+  });
+});

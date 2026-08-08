@@ -43,6 +43,25 @@ interface GeminiResponse {
 export function buildPromptText(request: ParseRequest): string {
   const parts = [request.prompt, '', '## Receipt text', '', request.ocrText];
 
+  if (request.images?.length) {
+    // The OCR text is still sent. On-device OCR resolves small print that a
+    // compressed JPEG loses, so the two disagree in *both* directions — but
+    // the photograph is why the user turned this on, so it is named as the
+    // authority. Without saying so, a confidently garbled line of OCR can
+    // anchor the model against what it can plainly see.
+    const count = request.images.length;
+    parts.push(
+      '',
+      '## Photographs',
+      '',
+      `${count} photograph${count === 1 ? '' : 's'} of this receipt ${count === 1 ? 'is' : 'are'} attached, in page order. ` +
+        'They are the authoritative source: where the receipt text above disagrees ' +
+        'with what you can see, trust the photographs. That text came from ' +
+        'on-device OCR and may have merged columns, dropped characters, or ' +
+        'misread digits.'
+    );
+  }
+
   if (request.priorErrors?.length) {
     parts.push(
       '',
@@ -73,7 +92,19 @@ export function createByokTransport(): ParseTransport {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: buildPromptText(request) }] }],
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: buildPromptText(request) },
+                // Images follow the text so the instructions are already in
+                // context when the model reaches them, and stay in page order.
+                ...(request.images ?? []).map((image) => ({
+                  inline_data: { mime_type: image.mimeType, data: image.base64 },
+                })),
+              ],
+            },
+          ],
           generationConfig: {
             // Ask for JSON directly. `extractJson` still tolerates prose and
             // fences, because a formatting quirk must not burn the one retry
