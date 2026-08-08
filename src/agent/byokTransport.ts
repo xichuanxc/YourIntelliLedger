@@ -80,6 +80,19 @@ export function createByokTransport(): ParseTransport {
             // §5.5 allows.
             responseMimeType: 'application/json',
             temperature: 0,
+            // NOTE — measured, and the obvious fix does not work here.
+            //
+            // On the TAIER receipt this model spent 726 thinking tokens against
+            // 92 of output: eight times the answer, for a receipt with no line
+            // items at all. Thinking tokens are timed as well as billed, so they
+            // dominate the wait, and a receipt parse is extraction against an
+            // explicit schema rather than reasoning.
+            //
+            // `thinkingConfig: { thinkingBudget: 0 }` is therefore what you want,
+            // but gemini-3.6-flash rejects it outright with "Request contains an
+            // invalid argument" — this model appears not to allow thinking to be
+            // switched off. Left unset deliberately. The levers that remain are a
+            // model that permits a thinking budget, or a shorter prompt.
           },
         }),
       });
