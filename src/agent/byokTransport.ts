@@ -43,6 +43,34 @@ interface GeminiResponse {
 export function buildPromptText(request: ParseRequest): string {
   const parts = [request.prompt, '', '## Receipt text', '', request.ocrText];
 
+  if (!request.images?.length) {
+    // Text-only path. The base prompt already warns that OCR is noisy and says
+    // "do your best to recover the true content", but it never actually says
+    // the model *may* change what it was given — so it tends to copy an
+    // obviously mangled name through verbatim. This grants that permission and
+    // then bounds it, because an unbounded licence to correct is a licence to
+    // invent, and there is no photograph here to check against.
+    parts.push(
+      '',
+      '## Correcting the OCR text',
+      '',
+      'This text is all you have — there is no photograph. Where you are ' +
+        'confident what the receipt actually said, correct it rather than ' +
+        'copying the error through:',
+      '',
+      '- Product and merchant names: fix obvious character confusions ' +
+        '(0/O, 1/l/I, 5/S, rn/m), split or merged words, and stray thermal-printer ' +
+        'symbols. A recognisable brand or product name is almost always the right read.',
+      '- Numbers: correct a digit only when something *proves* it — the line ' +
+        'arithmetic (qty × unit price), or the items against the printed total. ' +
+        'A digit that merely looks odd is not evidence.',
+      '- Never supply a value that is not in the text at all. The "when you are ' +
+        'not sure" rules still win: null, and say so.',
+      '- If you corrected a line and any doubt remains, set its `confidence` to ' +
+        '`"low"` so the person checks it.'
+    );
+  }
+
   if (request.images?.length) {
     // The OCR text is still sent. On-device OCR resolves small print that a
     // compressed JPEG loses, so the two disagree in *both* directions — but

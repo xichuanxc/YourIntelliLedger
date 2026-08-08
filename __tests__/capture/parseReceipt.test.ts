@@ -160,14 +160,18 @@ describe('the generated prompt module', () => {
 describe('vision parsing', () => {
   const image = { base64: 'AAAA', mimeType: 'image/jpeg' };
 
-  it('says nothing about photographs when none are sent', () => {
+  /** The word appears in the text-only guidance ("there is no photograph"), so
+   *  these assert the section and its instruction, not the bare word. */
+  it('attaches no photographs section when none are sent', () => {
     const text = buildPromptText({ prompt: PROMPT, ocrText: 'MILK 6.39' });
-    expect(text).not.toMatch(/photograph/i);
+    expect(text).not.toMatch(/## Photographs/);
+    expect(text).not.toMatch(/trust the photographs/i);
   });
 
-  it('says nothing about photographs for an empty list', () => {
+  it('attaches no photographs section for an empty list', () => {
     const text = buildPromptText({ prompt: PROMPT, ocrText: 'MILK 6.39', images: [] });
-    expect(text).not.toMatch(/photograph/i);
+    expect(text).not.toMatch(/## Photographs/);
+    expect(text).not.toMatch(/trust the photographs/i);
   });
 
   /**
@@ -251,5 +255,62 @@ describe('vision parsing', () => {
     expect(seen).toHaveLength(2);
     expect(seen[1].images).toEqual([image]);
     expect(seen[1].priorErrors?.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * OCR correction guidance, text-only path.
+ *
+ * The base prompt warns that OCR is noisy and says "do your best to recover
+ * the true content", but never says the model may *change* what it was given —
+ * so an obviously mangled name tends to come back verbatim. This grants that
+ * permission, and bounds it: with no photograph to check against, an
+ * unbounded licence to correct is a licence to invent.
+ */
+describe('OCR correction guidance', () => {
+  const image = { base64: 'AAAA', mimeType: 'image/jpeg' };
+
+  it('authorises correction when no photograph is sent', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'M1LK 6.39' });
+
+    expect(text).toMatch(/Correcting the OCR text/);
+    expect(text).toMatch(/confident/i);
+  });
+
+  /** The bounds are the point — each is a separate failure mode. */
+  it('bounds it: names freely, digits only on evidence, never invent', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'M1LK 6.39' });
+
+    expect(text).toMatch(/character confusions/i);
+    expect(text).toMatch(/only when something \*proves\* it/i);
+    expect(text).toMatch(/[Nn]ever supply a value that is not in the text/);
+  });
+
+  /** A corrected line the model is unsure of has to reach the review screen. */
+  it('asks for low confidence on a corrected but doubtful line', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'M1LK 6.39' });
+    expect(text).toMatch(/confidence.*low/is);
+  });
+
+  /**
+   * With a photograph the correction instruction would compete with "trust the
+   * photographs" — two different authorities for the same disagreement.
+   */
+  it('is replaced by the photograph guidance when images are sent', () => {
+    const text = buildPromptText({ prompt: PROMPT, ocrText: 'M1LK 6.39', images: [image] });
+
+    expect(text).not.toMatch(/Correcting the OCR text/);
+    expect(text).toMatch(/trust the photographs/i);
+  });
+
+  it('still carries the rejection reasons on a text-only retry', () => {
+    const text = buildPromptText({
+      prompt: PROMPT,
+      ocrText: 'M1LK 6.39',
+      priorErrors: ['`total_cents` must be an integer.'],
+    });
+
+    expect(text).toMatch(/Correcting the OCR text/);
+    expect(text).toMatch(/previous answer was rejected/);
   });
 });
