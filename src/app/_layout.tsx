@@ -59,7 +59,27 @@ export default function RootLayout() {
           {/* The launch screen is navy in both schemes, so the status bar has
               to be light while it is up regardless of the system setting. */}
           <StatusBar style={launching ? 'light' : 'auto'} />
-          <Stack>
+          <Stack
+            screenOptions={{
+              /**
+               * A bare chevron, with no label beside it.
+               *
+               * iOS defaults this to "default", which labels the back button
+               * with the *previous screen's* title. The tab container has no
+               * title, so expo-router fell back to its route name and every
+               * pushed screen read "‹ (tabs)" — a route-group directory name,
+               * an implementation detail, on screen. Android never showed it
+               * because "minimal" is already the default everywhere else.
+               *
+               * A label would be the more iOS-idiomatic choice, but only if it
+               * were accurate. A static title on the group would say "‹ Ledger"
+               * even when you arrived from Insights, and titling it per tab
+               * means threading state through a container whose own headers are
+               * hidden — brittle, for a word. The chevron is unambiguous, and
+               * it makes both platforms agree.
+               */
+              headerBackButtonDisplayMode: 'minimal',
+            }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="bill/new" options={{ title: 'New bill', presentation: 'modal' }} />
             <Stack.Screen name="bill/[id]" options={{ title: 'Bill' }} />
