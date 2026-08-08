@@ -7,7 +7,7 @@
  */
 
 import type { LocalDate } from '@/types/ledger';
-import type { Category } from '@/types/vocabulary';
+import type { Category, Unit } from '@/types/vocabulary';
 
 export interface SpendSummary {
   totalCents: number;
@@ -54,6 +54,50 @@ export interface MerchantTotal {
   merchantNorm: string | null;
   totalCents: number;
   billCount: number;
+}
+
+/**
+ * One line behind a category slice — an item, with the bill it came from.
+ *
+ * Categories live on items, so drilling into a category is drilling into
+ * items, not bills. The merchant and date come along because "Produce, $31.12"
+ * is only useful once you can see it was four visits to two shops.
+ */
+export interface CategoryItem {
+  billId: number;
+  purchasedAt: LocalDate;
+  merchant: string | null;
+  name: string;
+  qty: number;
+  unit: Unit;
+  /** NULL for an illegible price (§4.3) — excluded from the category's total. */
+  priceCents: number | null;
+}
+
+/** One line behind a merchant slice — a bill, since merchants live on bills. */
+export interface MerchantBill {
+  billId: number;
+  purchasedAt: LocalDate;
+  merchant: string | null;
+  totalCents: number;
+  itemCount: number;
+}
+
+/**
+ * One line behind the "Not itemised" slice.
+ *
+ * The remainder is not "bills with no items" — a bill can be partly itemised,
+ * and a discount or an illegible price opens the same gap. So this reports the
+ * shortfall *per bill*: what the receipt totalled, what its items account for,
+ * and the difference. Summed, `remainderCents` is `unitemisedCents`.
+ */
+export interface UnitemisedBill {
+  billId: number;
+  purchasedAt: LocalDate;
+  merchant: string | null;
+  totalCents: number;
+  itemisedCents: number;
+  remainderCents: number;
 }
 
 export interface MonthTotal {

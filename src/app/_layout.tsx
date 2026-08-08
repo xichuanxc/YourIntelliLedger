@@ -69,6 +69,8 @@ export default function RootLayout() {
             <Stack.Screen name="capture/camera" options={{ headerShown: false }} />
             <Stack.Screen name="capture/result" options={{ title: 'Receipt text' }} />
             <Stack.Screen name="capture/review" options={{ title: 'Check this receipt' }} />
+            {/* Titled at runtime with the slice that was tapped. */}
+            <Stack.Screen name="insights/breakdown" options={{ title: '' }} />
             <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
           </Stack>
 

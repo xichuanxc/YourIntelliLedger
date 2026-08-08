@@ -22,6 +22,7 @@ import {
 import { formatMoney, formatMoneyCompact } from '@/data/money';
 import type { CategoryBreakdown, MerchantTotal, MonthTotal, SpendSummary } from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
+import type { BreakdownDimension } from '@/app/insights/breakdown';
 import { DonutBreakdown } from '@/ui/components/donut-breakdown';
 import type { SliceInput } from '@/ui/chartSlices';
 import { ChipSelect } from '@/ui/components/chip-select';
@@ -164,6 +165,25 @@ export default function InsightsScreen() {
   // a share it does not have.
   const merchantTotal = merchantEntries.reduce((sum, entry) => sum + entry.valueCents, 0);
 
+  /**
+   * The period travels with the drill-down rather than being recomputed there.
+   * It is anchored on the newest month that has data, so a screen that derived
+   * it again would disagree with the figure the user just tapped as soon as a
+   * bill landed in another tab.
+   */
+  const openBreakdown = (dimension: BreakdownDimension, key: string, label: string) =>
+    router.push({
+      pathname: '/insights/breakdown',
+      params: {
+        dimension,
+        key,
+        label,
+        from: period.from,
+        to: period.to,
+        currency: summary.currency,
+      },
+    });
+
   return (
     <Screen>
       <Header />
@@ -241,6 +261,15 @@ export default function InsightsScreen() {
                   currency={summary.currency}
                   totalCents={breakdown.totalCents}
                   emptyMessage="No itemised spending in this period."
+                  onSelect={(slice) =>
+                    openBreakdown(
+                      // The remainder is not a category, so it drills into
+                      // bills-and-shortfalls rather than into items.
+                      slice.key === 'unitemised' ? 'unitemised' : 'category',
+                      slice.key,
+                      slice.label
+                    )
+                  }
                 />
               </View>
 
@@ -262,6 +291,17 @@ export default function InsightsScreen() {
                   totalLabel={`top ${merchantEntries.length}`}
                   foldedLabel="Other merchants"
                   emptyMessage="No merchants recorded in this period."
+                  onSelect={(slice) => {
+                    // The slice key stands in for a NULL merchant_norm, which
+                    // a route parameter cannot carry; the query takes '' back
+                    // to NULL. Looked up rather than reversed, so a merchant
+                    // that genuinely normalises to "unnamed" is not confused
+                    // with the bills that recorded no merchant at all.
+                    const match = merchants.find(
+                      (entry) => (entry.merchantNorm ?? 'unnamed') === slice.key
+                    );
+                    openBreakdown('merchant', match?.merchantNorm ?? '', slice.label);
+                  }}
                 />
               </View>
             </Section>

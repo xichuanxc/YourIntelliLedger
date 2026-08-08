@@ -16,15 +16,19 @@
 import type { Period } from '@/data/dates';
 import { addMonths, endOfMonth, monthOf, monthSequence, startOfMonth } from '@/data/dates';
 import type { SqlDriver, SqlValue } from '@/data/driver';
+import type { LocalDate } from '@/types/ledger';
 import type {
   CategoryBreakdown,
+  CategoryItem,
   CategoryTotal,
   DataRange,
+  MerchantBill,
   MerchantTotal,
   MonthTotal,
   SpendSummary,
+  UnitemisedBill,
 } from '@/types/insights';
-import type { Category } from '@/types/vocabulary';
+import type { Category, Unit } from '@/types/vocabulary';
 
 const DEFAULT_CURRENCY = 'NZD';
 
@@ -199,6 +203,136 @@ export async function getMonthlyTrend(
     totalCents: byMonth.get(month)?.total_cents ?? 0,
     billCount: byMonth.get(month)?.bill_count ?? 0,
   }));
+}
+
+/**
+ * The items behind one category slice, newest first (§7 drill-down).
+ *
+ * Ordered by date descending because that is the question being asked — "what
+ * did I buy, and when" — with the item name as a stable tiebreak so two lines
+ * on the same receipt do not swap places between renders.
+ *
+ * Illegible prices are kept, as NULL. They are excluded from the category
+ * total by `getCategoryBreakdown`'s `SUM`, so hiding them here would leave a
+ * list that quietly fails to add up to the figure that led the user into it.
+ */
+export async function getCategoryItems(
+  db: SqlDriver,
+  period: Period,
+  category: Category
+): Promise<CategoryItem[]> {
+  const rows = await db.all<{
+    bill_id: number;
+    purchased_at: LocalDate;
+    merchant: string | null;
+    name: string;
+    qty: number;
+    unit: Unit;
+    price_cents: number | null;
+  }>(
+    `SELECT i.bill_id, b.purchased_at, b.merchant, i.name, i.qty, i.unit, i.price_cents
+       FROM bill_items i
+       JOIN bills b ON b.id = i.bill_id
+      WHERE b.purchased_at BETWEEN ? AND ?
+        AND i.category = ?
+      ORDER BY b.purchased_at DESC, i.name`,
+    [...periodParams(period), category]
+  );
+
+  return rows.map((row) => ({
+    billId: row.bill_id,
+    purchasedAt: row.purchased_at,
+    merchant: row.merchant,
+    name: row.name,
+    qty: row.qty,
+    unit: row.unit,
+    priceCents: row.price_cents,
+  }));
+}
+
+/**
+ * The bills behind one merchant slice, newest first.
+ *
+ * `merchantNorm` is the §4.8 grouping key, and NULL is a real value — bills
+ * that recorded no merchant group together. `IS` rather than `=` because in
+ * SQL `NULL = NULL` is NULL, so an equality test would silently return nothing
+ * for exactly that group.
+ */
+export async function getMerchantBills(
+  db: SqlDriver,
+  period: Period,
+  merchantNorm: string | null
+): Promise<MerchantBill[]> {
+  const rows = await db.all<{
+    id: number;
+    purchased_at: LocalDate;
+    merchant: string | null;
+    total_cents: number;
+    item_count: number;
+  }>(
+    `SELECT b.id, b.purchased_at, b.merchant, b.total_cents,
+            (SELECT COUNT(*) FROM bill_items i WHERE i.bill_id = b.id) AS item_count
+       FROM bills b
+      WHERE b.purchased_at BETWEEN ? AND ?
+        AND b.merchant_norm IS ?
+      ORDER BY b.purchased_at DESC, b.id DESC`,
+    [...periodParams(period), merchantNorm]
+  );
+
+  return rows.map((row) => ({
+    billId: row.id,
+    purchasedAt: row.purchased_at,
+    merchant: row.merchant,
+    totalCents: row.total_cents,
+    itemCount: row.item_count,
+  }));
+}
+
+/**
+ * The bills behind the "Not itemised" slice, largest shortfall first.
+ *
+ * This is the one drill-down that is not a simple filter. The remainder is
+ * `totalCents - itemisedCents` across the whole period (§14.6), so the honest
+ * per-row unit is each bill's own shortfall — not "bills with no items", which
+ * would miss a partly itemised receipt and a per-line discount alike.
+ *
+ * Ordered by shortfall rather than date: the question here is "what is making
+ * up that half of my spending", and the answer is usually one or two bills.
+ * Rows where the items already account for the total are excluded — a
+ * remainder of zero explains nothing.
+ */
+export async function getUnitemisedBills(
+  db: SqlDriver,
+  period: Period
+): Promise<UnitemisedBill[]> {
+  const rows = await db.all<{
+    id: number;
+    purchased_at: LocalDate;
+    merchant: string | null;
+    total_cents: number;
+    itemised_cents: number | null;
+  }>(
+    `SELECT b.id, b.purchased_at, b.merchant, b.total_cents,
+            (SELECT SUM(i.price_cents) FROM bill_items i WHERE i.bill_id = b.id) AS itemised_cents
+       FROM bills b
+      WHERE b.purchased_at BETWEEN ? AND ?
+      ORDER BY (b.total_cents - COALESCE(itemised_cents, 0)) DESC, b.purchased_at DESC`,
+    periodParams(period)
+  );
+
+  return rows
+    .map((row) => {
+      const itemisedCents = row.itemised_cents ?? 0;
+      return {
+        billId: row.id,
+        purchasedAt: row.purchased_at,
+        merchant: row.merchant,
+        totalCents: row.total_cents,
+        itemisedCents,
+        remainderCents: row.total_cents - itemisedCents,
+      };
+    })
+    .filter((row) => row.remainderCents > 0);
 }
 
 /** What the ledger spans, irrespective of any selected period. */

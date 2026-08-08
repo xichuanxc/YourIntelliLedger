@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 
 import { formatMoney } from '@/data/money';
 import { neutralFor, paletteFor } from '@/ui/chartPalette';
-import { sharePercentages, toSlices, type SliceInput } from '@/ui/chartSlices';
+import { sharePercentages, toSlices, type Slice, type SliceInput } from '@/ui/chartSlices';
+import { ChevronRightIcon } from '@/ui/components/chevron-icon';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useColorScheme } from '@/ui/hooks/use-color-scheme';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -23,6 +24,12 @@ export interface DonutBreakdownProps {
   totalLabel?: string;
   foldedLabel?: string;
   emptyMessage: string;
+  /**
+   * Drill into a slice. Supplying this makes the legend rows tappable —
+   * except the folded tail, which stands for several things at once and so
+   * has no single detail to show.
+   */
+  onSelect?: (slice: Slice) => void;
 }
 
 /**
@@ -44,6 +51,7 @@ export function DonutBreakdown({
   totalLabel = 'total',
   foldedLabel,
   emptyMessage,
+  onSelect,
 }: DonutBreakdownProps) {
   const theme = useTheme();
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
@@ -104,25 +112,57 @@ export function DonutBreakdown({
       </View>
 
       <View style={styles.legend}>
-        {slices.map((slice, index) => (
-          <View
-            key={slice.key}
-            style={styles.legendRow}
-            accessibilityRole="text"
-            accessibilityLabel={`${slice.label}, ${formatMoney(slice.valueCents, currency)}, ${percentages[index]} percent`}>
-            <View style={[styles.swatch, { backgroundColor: colours[index] }]} />
-            <ThemedText style={styles.legendLabel} numberOfLines={1}>
-              {slice.label}
-              {slice.mergedCount > 1 ? ` (${slice.mergedCount})` : ''}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.legendPercent}>
-              {percentages[index]}%
-            </ThemedText>
-            <ThemedText type="amount" style={styles.legendValue}>
-              {formatMoney(slice.valueCents, currency)}
-            </ThemedText>
-          </View>
-        ))}
+        {slices.map((slice, index) => {
+          const description = `${slice.label}, ${formatMoney(slice.valueCents, currency)}, ${percentages[index]} percent`;
+          // The folded tail is several categories wearing one label; there is
+          // no single list of anything behind it.
+          const selectable = onSelect !== undefined && !slice.folded;
+
+          const content = (
+            <>
+              <View style={[styles.swatch, { backgroundColor: colours[index] }]} />
+              <ThemedText style={styles.legendLabel} numberOfLines={1}>
+                {slice.label}
+                {slice.mergedCount > 1 ? ` (${slice.mergedCount})` : ''}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.legendPercent}>
+                {percentages[index]}%
+              </ThemedText>
+              <ThemedText type="amount" style={styles.legendValue}>
+                {formatMoney(slice.valueCents, currency)}
+              </ThemedText>
+              {/* Reserves its width on every row, tappable or not, so the
+                  amounts stay in one column down the legend. */}
+              <View style={styles.chevronSlot}>
+                {selectable && <ChevronRightIcon color={theme.textSecondary} />}
+              </View>
+            </>
+          );
+
+          if (!selectable) {
+            return (
+              <View key={slice.key} style={styles.legendRow} accessibilityRole="text" accessibilityLabel={description}>
+                {content}
+              </View>
+            );
+          }
+
+          return (
+            <Pressable
+              key={slice.key}
+              onPress={() => onSelect(slice)}
+              accessibilityRole="button"
+              accessibilityLabel={description}
+              accessibilityHint="Shows what makes up this share"
+              style={({ pressed }) => [
+                styles.legendRow,
+                styles.legendRowPressable,
+                pressed && { backgroundColor: theme.backgroundSelected },
+              ]}>
+              {content}
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -134,8 +174,20 @@ const styles = StyleSheet.create({
   centre: { alignItems: 'center' },
   legend: { gap: Spacing.two },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  /**
+   * Vertical padding pulled out of the row gap so a tappable row clears the
+   * 44pt floor, negative margin so adding it does not respace the legend.
+   */
+  legendRowPressable: {
+    paddingVertical: Spacing.two,
+    marginVertical: -Spacing.two,
+    paddingHorizontal: Spacing.two,
+    marginHorizontal: -Spacing.two,
+    borderRadius: Radius.small,
+  },
   swatch: { width: 12, height: 12, borderRadius: Radius.small },
   legendLabel: { flex: 1 },
   legendPercent: { minWidth: 38, textAlign: 'right' },
   legendValue: { minWidth: 72, textAlign: 'right' },
+  chevronSlot: { width: 14, alignItems: 'flex-end' },
 });

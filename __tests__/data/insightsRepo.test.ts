@@ -4,11 +4,14 @@ import type { Period } from '@/data/dates';
 import type { SqlDriver } from '@/data/driver';
 import {
   getCategoryBreakdown,
+  getCategoryItems,
   getDataRange,
   getLatestMonth,
+  getMerchantBills,
   getMerchantBreakdown,
   getMonthlyTrend,
   getSpendSummary,
+  getUnitemisedBills,
 } from '@/data/insightsRepo';
 import { createBill } from '@/data/ledgerRepo';
 import { migrate } from '@/data/migrate';
@@ -270,5 +273,208 @@ describe('multi-month periods', () => {
 
     expect((await getSpendSummary(db, Q2_Q3)).totalCents).toBe(600);
     expect((await getSpendSummary(db, JUNE)).totalCents).toBe(200);
+  });
+});
+
+/**
+ * The drill-downs (§7): what is behind one slice of a donut.
+ *
+ * The property that matters throughout is **reconciliation** — a detail list
+ * has to add up to the figure the user tapped to reach it. A list that quietly
+ * disagrees with the chart above it is worse than no list, because it looks
+ * authoritative. Each of these therefore checks the sum against the aggregate
+ * query that drew the slice, not against a hardcoded number.
+ */
+describe('getCategoryItems', () => {
+  it('adds up to the category total that was tapped', async () => {
+    await createBill(
+      db,
+      bill({
+        purchasedAt: '2026-07-02',
+        totalCents: 900,
+        items: [
+          { name: 'Milk', category: 'dairy', priceCents: 500 },
+          { name: 'Cheese', category: 'dairy', priceCents: 400 },
+        ],
+      })
+    );
+    await createBill(
+      db,
+      bill({
+        purchasedAt: '2026-07-20',
+        totalCents: 300,
+        items: [{ name: 'Apples', category: 'produce', priceCents: 300 }],
+      })
+    );
+
+    const items = await getCategoryItems(db, JULY, 'dairy');
+    const breakdown = await getCategoryBreakdown(db, JULY);
+    const dairy = breakdown.categories.find((entry) => entry.category === 'dairy')!;
+
+    expect(items).toHaveLength(2);
+    expect(items.reduce((sum, item) => sum + (item.priceCents ?? 0), 0)).toBe(dairy.totalCents);
+  });
+
+  it('returns newest first, so the list reads as a history', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-07-02', items: [{ name: 'Old', category: 'dairy', priceCents: 100 }] }));
+    await createBill(db, bill({ purchasedAt: '2026-07-25', items: [{ name: 'New', category: 'dairy', priceCents: 100 }] }));
+
+    const items = await getCategoryItems(db, JULY, 'dairy');
+    expect(items.map((item) => item.name)).toEqual(['New', 'Old']);
+  });
+
+  it('carries the bill each item came from, so a row can be opened', async () => {
+    const billId = await createBill(db, bill({ merchant: "PAK'nSAVE" }));
+    const [item] = await getCategoryItems(db, JULY, 'dairy');
+
+    expect(item.billId).toBe(billId);
+    expect(item.merchant).toBe("PAK'nSAVE");
+  });
+
+  /**
+   * `getCategoryBreakdown`'s SUM skips NULL prices, so an illegible line is
+   * absent from the category total. Dropping it here too would leave a list
+   * that adds up but silently omits a purchase the user can see on the bill.
+   */
+  it('keeps an illegible price as unknown rather than hiding the line', async () => {
+    await createBill(
+      db,
+      bill({
+        totalCents: 500,
+        items: [
+          { name: 'Milk', category: 'dairy', priceCents: 500 },
+          { name: 'Smudged', category: 'dairy', priceCents: null },
+        ],
+      })
+    );
+
+    const items = await getCategoryItems(db, JULY, 'dairy');
+    expect(items).toHaveLength(2);
+    expect(items.find((item) => item.name === 'Smudged')!.priceCents).toBeNull();
+  });
+
+  it('excludes items outside the period', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-06-15' }));
+    expect(await getCategoryItems(db, JULY, 'dairy')).toEqual([]);
+  });
+});
+
+describe('getMerchantBills', () => {
+  it('adds up to the merchant total that was tapped', async () => {
+    await createBill(db, bill({ merchant: "PAK'nSAVE", purchasedAt: '2026-07-02', totalCents: 1000 }));
+    await createBill(db, bill({ merchant: 'PAKnSAVE', purchasedAt: '2026-07-20', totalCents: 2500 }));
+    await createBill(db, bill({ merchant: 'Countdown', purchasedAt: '2026-07-11', totalCents: 700 }));
+
+    const [top] = await getMerchantBreakdown(db, JULY, 1);
+    const bills = await getMerchantBills(db, JULY, top.merchantNorm);
+
+    expect(bills.reduce((sum, row) => sum + row.totalCents, 0)).toBe(top.totalCents);
+    expect(bills).toHaveLength(top.billCount);
+  });
+
+  /**
+   * §4.8 groups on the normalised name, so two spellings are one merchant.
+   * The drill-down has to use the same key or it would show a subset of the
+   * bills that produced the slice.
+   *
+   * These two converge because §4.8 *drops* punctuation rather than replacing
+   * it with a space — "PAK n SAVE" would not join them, which is the
+   * normalisation's known limitation rather than a bug in this query.
+   */
+  it('groups the spellings that normalise together, as the chart does', async () => {
+    await createBill(db, bill({ merchant: "PAK'nSAVE", totalCents: 1000 }));
+    await createBill(db, bill({ merchant: 'PAKnSAVE', totalCents: 2000 }));
+
+    const [top] = await getMerchantBreakdown(db, JULY, 1);
+    expect(top.merchantNorm).toBe('paknsave');
+    expect(await getMerchantBills(db, JULY, top.merchantNorm)).toHaveLength(2);
+  });
+
+  /**
+   * `merchant_norm = NULL` is never true in SQL, so an equality test would
+   * return nothing for exactly the group that needs `IS`.
+   */
+  it('finds the bills that recorded no merchant at all', async () => {
+    await createBill(db, bill({ merchant: null, totalCents: 400 }));
+    await createBill(db, bill({ merchant: 'New World', totalCents: 400 }));
+
+    const bills = await getMerchantBills(db, JULY, null);
+    expect(bills).toHaveLength(1);
+    expect(bills[0].merchant).toBeNull();
+  });
+
+  it('returns newest first and counts each bill’s items', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-07-02', totalCents: 100, items: [] }));
+    await createBill(
+      db,
+      bill({
+        purchasedAt: '2026-07-25',
+        totalCents: 300,
+        items: [
+          { name: 'A', category: 'dairy', priceCents: 100 },
+          { name: 'B', category: 'dairy', priceCents: 200 },
+        ],
+      })
+    );
+
+    const bills = await getMerchantBills(db, JULY, 'new world');
+    expect(bills.map((row) => row.itemCount)).toEqual([2, 0]);
+  });
+});
+
+describe('getUnitemisedBills', () => {
+  /** The whole reason the slice exists (§14.6) — so this must reconcile. */
+  it('adds up to the remainder the chart reported', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-07-02', totalCents: 5000, items: [] }));
+    await createBill(
+      db,
+      bill({
+        purchasedAt: '2026-07-11',
+        totalCents: 1000,
+        items: [{ name: 'Milk', category: 'dairy', priceCents: 600 }],
+      })
+    );
+
+    const rows = await getUnitemisedBills(db, JULY);
+    const { unitemisedCents } = await getCategoryBreakdown(db, JULY);
+
+    expect(rows.reduce((sum, row) => sum + row.remainderCents, 0)).toBe(unitemisedCents);
+  });
+
+  /**
+   * Not the same as "bills with no items": a partly itemised receipt, a
+   * discount, or an illegible price opens the same gap.
+   */
+  it('includes a partly itemised bill, not only itemless ones', async () => {
+    await createBill(
+      db,
+      bill({
+        totalCents: 1000,
+        items: [{ name: 'Milk', category: 'dairy', priceCents: 600 }],
+      })
+    );
+
+    const [row] = await getUnitemisedBills(db, JULY);
+    expect(row.itemisedCents).toBe(600);
+    expect(row.remainderCents).toBe(400);
+  });
+
+  it('leaves out bills whose items already account for the total', async () => {
+    await createBill(db, bill({ totalCents: 1000, items: [{ name: 'Milk', category: 'dairy', priceCents: 1000 }] }));
+    expect(await getUnitemisedBills(db, JULY)).toEqual([]);
+  });
+
+  /** The question is "what is making up that share", so the biggest leads. */
+  it('orders by shortfall, largest first', async () => {
+    await createBill(db, bill({ merchant: 'Small', totalCents: 300, items: [] }));
+    await createBill(db, bill({ merchant: 'Large', totalCents: 9000, items: [] }));
+
+    const rows = await getUnitemisedBills(db, JULY);
+    expect(rows.map((row) => row.merchant)).toEqual(['Large', 'Small']);
+  });
+
+  it('is empty when everything in the period is fully itemised', async () => {
+    await createBill(db, bill({ totalCents: 1000, items: [{ name: 'Milk', category: 'dairy', priceCents: 1000 }] }));
+    expect(await getUnitemisedBills(db, JULY)).toEqual([]);
   });
 });
