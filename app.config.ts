@@ -16,17 +16,23 @@ const config: ExpoConfig = {
                         // synced to Google's auto-backup
     permissions: ['CAMERA'],
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
+      // Sampled from the artwork's night sky, so the mask's edge blends with
+      // the image rather than showing a contrasting ring.
+      backgroundColor: '#11235F',
       foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
-      monochromeImage: './assets/images/android-icon-monochrome.png',
+      // No backgroundImage or monochromeImage: the template's were unrelated
+      // artwork, and a themed (monochrome) icon derived automatically from a
+      // full-colour illustration reads as a smudge. Android falls back to the
+      // standard icon for themed mode, which is the better of the two.
     },
     predictiveBackGestureEnabled: false,
   },
   ios: {
     bundleIdentifier: 'nz.yourintelliledger.app',
     supportsTablet: false,
-    icon: './assets/expo.icon',
+    // No `icon` override: the template pointed this at its own `expo.icon`
+    // asset catalog, which would have silently kept the Expo logo on iOS no
+    // matter what the top-level `icon` said.
     infoPlist: {
       NSCameraUsageDescription:
         'Used to photograph receipts so purchases can be recorded automatically.',
