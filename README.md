@@ -52,6 +52,49 @@ npx expo prebuild --platform ios   # generates ios/ and runs pod install
 npm run ios                        # or: npx expo run:ios --device <udid>
 ```
 
+**A Debug build always needs Metro. There is no standalone `__DEV__` build.**
+Worth knowing before trying, because the attempt looks like it should work.
+
+React Native's own `react-native-xcode.sh` embeds the bundle for a physical
+device and skips only for the Simulator — but Expo's generated build phase
+overrides that:
+
+```sh
+if [[ "$CONFIGURATION" = *Debug* ]]; then
+  export SKIP_BUNDLING=1
+fi
+```
+
+so a Debug `.app` contains `ip.txt` and no JS at all. The same script sources
+`.xcode.env.updates` afterwards, commented "to allow SKIP_BUNDLING to be unset
+if needed", which reads like a sanctioned override. It is not one for this
+purpose: `unset SKIP_BUNDLING` does produce a bundle, and the resulting app
+dies at startup with
+
+```
+[runtime not ready]: Error: Cannot create devtools websocket connections in
+embedded environments.
+```
+
+thrown unconditionally by `@expo/log-box`:
+
+```js
+if (!devServer.bundleLoadedFromServer) { throw new Error(…); }
+```
+
+`__DEV__` pulls LogBox in and LogBox requires a dev server, so the skip is
+load-bearing rather than an oversight. **For a build that runs away from the
+laptop, use `--configuration Release`** — it embeds the bundle and never
+consults Metro. The cost is `__DEV__`: no dev-tool icons on the Ledger, no
+parse timing line on the review screen. Move those behind a runtime
+preference if a standalone build needs them.
+
+Note this is separate from *reachability*. A Debug build on a network with
+client isolation (most campus Wi-Fi) cannot reach Metro on the laptop either,
+and fails the same way from the user's side. Android is immune because
+`adb reverse` tunnels over USB; iOS has no equivalent, so the workaround there
+is a personal hotspot.
+
 **The project path must not contain a space.** This cost a full debugging
 cycle and is worth stating plainly. Two independent packages interpolate the
 project path into a shell command without quoting it:
