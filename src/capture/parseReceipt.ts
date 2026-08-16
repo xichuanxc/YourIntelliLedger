@@ -14,6 +14,7 @@
 
 import { RECEIPT_PARSE_PROMPT } from '@/capture/prompts/receiptParseText';
 import { extractJson, validateParsedReceipt, type ParsedReceipt } from '@/capture/parseContract';
+import { enrichWithProductData, type EnrichmentResult } from '@/capture/enrichBarcodes';
 import { runPostChecks, type ItemIssue } from '@/capture/postChecks';
 import type { ParseImage, ParseTransport } from '@/agent/parseTransport';
 import type { ParseFlag } from '@/types/vocabulary';
@@ -22,6 +23,8 @@ export interface ParseOutcome {
   receipt: ParsedReceipt;
   flags: ParseFlag[];
   issues: ItemIssue[];
+  /** Items whose name or category Open Food Facts changed (§5.5 check 5). */
+  enrichedIndices: number[];
   modelAlias: string;
   /** True when the first attempt was rejected and the retry succeeded. */
   retried: boolean;
@@ -54,6 +57,10 @@ export interface ParseOptions {
    * no opinion about what the transport puts on the wire.
    */
   images?: readonly ParseImage[];
+  /**
+   * §5.5 check 5. Injected in tests, so no test reaches Open Food Facts.
+   */
+  enrich?: (receipt: ParsedReceipt) => Promise<EnrichmentResult>;
 }
 
 export async function parseReceipt(
@@ -92,20 +99,29 @@ export async function parseReceipt(
     }
 
     const checked = runPostChecks(validated.value);
+
+    // §5.5 check 5, run after 1–4 rather than among them: check 4 has just
+    // nulled any barcode that failed its check digit, so no lookup is spent on
+    // OCR noise. Never throws — a failed enrichment leaves the receipt exactly
+    // as the model produced it.
+    const enrich = options.enrich ?? enrichWithProductData;
+    const enriched = await enrich(checked.receipt);
+
     const durationMs = Date.now() - startedAt;
 
     if (__DEV__) {
       console.log(
         `[parse] ${durationMs}ms attempts=${attempt + 1} ` +
           `in=${response.usage?.promptTokens ?? '?'} out=${response.usage?.completionTokens ?? "?"} think=${response.usage?.thoughtTokens ?? "?"} ` +
-          `items=${checked.receipt.items.length}`
+          `items=${enriched.receipt.items.length} enriched=${enriched.enrichedIndices.length}`
       );
     }
 
     return {
-      receipt: checked.receipt,
+      receipt: enriched.receipt,
       flags: checked.flags,
       issues: checked.issues,
+      enrichedIndices: enriched.enrichedIndices,
       modelAlias: response.modelAlias,
       retried: attempt > 0,
       durationMs,
