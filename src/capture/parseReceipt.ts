@@ -104,14 +104,20 @@ export async function parseReceipt(
     // nulled any barcode that failed its check digit, so no lookup is spent on
     // OCR noise. Never throws — a failed enrichment leaves the receipt exactly
     // as the model produced it.
+    const modelMs = Date.now() - startedAt;
+
     const enrich = options.enrich ?? enrichWithProductData;
     const enriched = await enrich(checked.receipt);
 
     const durationMs = Date.now() - startedAt;
 
     if (__DEV__) {
+      // Model and enrichment reported separately. They were one number until a
+      // 20s parse could not be attributed to either — and enrichment is up to
+      // a dozen sequential network round-trips, so it can dominate silently.
       console.log(
-        `[parse] ${durationMs}ms attempts=${attempt + 1} ` +
+        `[parse] ${durationMs}ms (model=${modelMs}ms enrich=${durationMs - modelMs}ms) ` +
+          `attempts=${attempt + 1} ` +
           `in=${response.usage?.promptTokens ?? '?'} out=${response.usage?.completionTokens ?? "?"} think=${response.usage?.thoughtTokens ?? "?"} ` +
           `items=${enriched.receipt.items.length} enriched=${enriched.enrichedIndices.length}`
       );

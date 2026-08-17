@@ -45,18 +45,42 @@ export async function processPage(
   pageNo: number,
   options: PipelineOptions = {}
 ): Promise<CapturedPage> {
+  const startedAt = Date.now();
+
   const image = await normaliseImage(uri);
+  const normalisedAt = Date.now();
+
   const page = await recogniseText(image.uri, options.script);
+  const recognisedAt = Date.now();
 
   const { elements, angleRadians } = correctSkew(page.elements, page.blocks, {
     width: image.width,
     height: image.height,
   });
 
+  const text = reconstructLines(elements);
+  const finishedAt = Date.now();
+
+  if (__DEV__) {
+    // §8.4 budgets OCR at 1.5s and §5.7 the whole capture→review at 6s — and a
+    // single total cannot say which stage spent it. The dimensions are here
+    // because the usual answer is a full-resolution camera frame: the §5.2
+    // downscale is the cheapest lever available, and how far it had to reduce
+    // is unanswerable once the source image is gone.
+    console.log(
+      `[capture] page ${pageNo} ` +
+        `src=${image.sourceWidth}x${image.sourceHeight} → ${image.width}x${image.height} ` +
+        `normalise=${normalisedAt - startedAt}ms ` +
+        `ocr=${recognisedAt - normalisedAt}ms ` +
+        `deskew+lines=${finishedAt - recognisedAt}ms ` +
+        `elements=${elements.length} chars=${text.length}`
+    );
+  }
+
   return {
     pageNo,
     image,
-    text: reconstructLines(elements),
+    text,
     skewDegrees: (angleRadians * 180) / Math.PI,
     elementCount: elements.length,
   };

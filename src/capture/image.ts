@@ -19,6 +19,15 @@ export interface NormalisedImage {
   uri: string;
   width: number;
   height: number;
+  /**
+   * What the camera or scanner actually handed us, before the §5.2 downscale.
+   *
+   * Kept for diagnostics: when capture is slow, the first question is whether
+   * a 12 MP frame arrived and how far it had to be reduced, and that is
+   * unanswerable after the fact from the output alone.
+   */
+  sourceWidth: number;
+  sourceHeight: number;
 }
 
 /** Downscales and re-encodes a captured image, preserving aspect ratio. */
@@ -48,7 +57,13 @@ export async function normaliseImage(
     format: SaveFormat.JPEG,
   });
 
-  return { uri: output.uri, width: output.width, height: output.height };
+  return {
+    uri: output.uri,
+    width: output.width,
+    height: output.height,
+    sourceWidth: probe.width,
+    sourceHeight: probe.height,
+  };
 }
 
 /**
