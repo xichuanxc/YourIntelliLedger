@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { getDb } from '@/data/db';
+import { refreshHubConfig } from '@/agent/modelConfig';
 import { getBlockScreenshots } from '@/data/prefs';
 import { applyScreenshotPolicy } from '@/data/screenPrivacy';
 import { LaunchScreen } from '@/ui/components/launch-screen';
@@ -30,6 +31,11 @@ export default function RootLayout() {
     getDb()
       .catch(setError)
       .finally(() => setReady(true));
+
+    // §13.4: refresh the alias table in the background. Deliberately not
+    // awaited and never able to fail — the app must open at the same speed
+    // whether or not the hub answers.
+    void refreshHubConfig();
 
     // §8.2: the screenshot block is a stored preference, so it has to be
     // re-applied on every launch — the flag itself does not persist.

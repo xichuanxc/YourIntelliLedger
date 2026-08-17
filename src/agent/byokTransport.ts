@@ -12,7 +12,8 @@
  * so a plain request is both simpler and less to go wrong.
  */
 
-import { getByokKey, getByokModel } from '@/agent/byokKey';
+import { getByokKey, getByokModelOverride } from '@/agent/byokKey';
+import { modelForAlias } from '@/agent/modelConfig';
 import {
   TransportRequestError,
   TransportUnavailableError,
@@ -115,7 +116,10 @@ export function createByokTransport(): ParseTransport {
         );
       }
 
-      const model = await getByokModel();
+      // §13.5: the app asks for an alias; the hub decides what answers. A
+      // deliberate Settings entry still wins, so a model can be evaluated
+      // before the hub is repointed at it.
+      const model = (await getByokModelOverride()) ?? modelForAlias('parse-strong');
       const response = await fetch(`${ENDPOINT}/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },

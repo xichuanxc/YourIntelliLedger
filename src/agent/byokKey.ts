@@ -34,12 +34,35 @@ export async function clearByokKey(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY);
 }
 
+/**
+ * The user's explicit model choice, or null when they have not made one.
+ *
+ * The distinction matters now that §13.5's alias table supplies the default:
+ * "no choice" means follow the hub, and only a deliberate entry overrides it.
+ * `getByokModel` cannot express that, because it substitutes a default for
+ * absence.
+ */
+export async function getByokModelOverride(): Promise<string | null> {
+  const stored = (await SecureStore.getItemAsync(MODEL_KEY))?.trim();
+  return stored ? stored : null;
+}
+
 export async function getByokModel(): Promise<string> {
   return (await SecureStore.getItemAsync(MODEL_KEY)) ?? DEFAULT_BYOK_MODEL;
 }
 
+/**
+ * Blank clears the override rather than storing the built-in default, so
+ * emptying the field in Settings hands the choice back to the hub. Without
+ * this there would be no way to undo an override.
+ */
 export async function setByokModel(model: string): Promise<void> {
-  await SecureStore.setItemAsync(MODEL_KEY, model.trim() || DEFAULT_BYOK_MODEL);
+  const trimmed = model.trim();
+  if (trimmed) {
+    await SecureStore.setItemAsync(MODEL_KEY, trimmed);
+  } else {
+    await SecureStore.deleteItemAsync(MODEL_KEY);
+  }
 }
 
 /**
