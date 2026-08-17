@@ -38,7 +38,7 @@ import type { Category } from '@/types/vocabulary';
  * which is why the list is ordered: the first entry whose fragment appears in
  * a tag wins for that tag, so narrower fragments must precede broader ones.
  */
-const TAG_MAP: ReadonlyArray<readonly [fragment: string, category: Category]> = [
+const TAG_MAP: readonly (readonly [fragment: string, category: Category])[] = [
   // A drink made of milk is a drink. Ordering the beverage block before dairy
   // is not enough on its own — that only settles a tag matching two fragments,
   // and here the clash is *between* tags ("en:beverages" then

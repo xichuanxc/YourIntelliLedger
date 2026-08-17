@@ -26,6 +26,7 @@ import type {
   BillSummary,
   BillWithItems,
   LedgerMonth,
+  LocalDate,
   NewBillInput,
   NewBillItemInput,
 } from '@/types/ledger';
@@ -158,6 +159,108 @@ export async function listLedger(
 export async function countBills(db: SqlDriver): Promise<number> {
   const row = await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM bills');
   return row?.n ?? 0;
+}
+
+/**
+ * Looks for a bill that may be this one already recorded.
+ *
+ * Not in the spec — it comes from watching the same PAK'nSAVE receipt land in
+ * the ledger twice. Re-scanning is easy to do: a parse takes a few seconds and
+ * there is nothing on screen afterwards to say the receipt was already there.
+ *
+ * ## What identifies a duplicate
+ *
+ * `merchant_norm` + `purchased_at` + `total_cents`. The total does the work:
+ * it is an exact integer that two parses of the same receipt agree on, while
+ * item lists do not — the same receipt read twice produces slightly different
+ * names, which is exactly why this does not fingerprint items.
+ *
+ * `purchased_time` grades the answer rather than gating it:
+ *
+ *  - **exact** — same minute, or neither receipt printed a time. A shop does
+ *    not produce two identical totals in one minute; this is a re-scan.
+ *  - **same-day** — everything matches but the times differ. Two genuine
+ *    purchases are entirely possible (the same lunch twice), so this is worth
+ *    mentioning and not worth alarming about.
+ *
+ * A NULL total returns nothing at all. An illegible total (§4.3) is too weak
+ * to accuse someone of double-scanning.
+ *
+ * ## What the caller must do with it
+ *
+ * Warn, never block. §5.6 makes the review screen the trust gate and nothing
+ * is written without an explicit tap, so a suspected duplicate is advisory in
+ * the same way the §4.11 flags are — the user can see the existing bill and
+ * decide. Two identical purchases are a real thing that must remain possible
+ * to record.
+ */
+export interface DuplicateCandidate {
+  merchantNorm: string | null;
+  purchasedAt: LocalDate;
+  purchasedTime: string | null;
+  totalCents: number | null;
+  /** Excluded from the search, so editing a bill never matches itself. */
+  excludeBillId?: number;
+}
+
+export interface DuplicateMatch {
+  billId: number;
+  merchant: string | null;
+  purchasedAt: LocalDate;
+  purchasedTime: string | null;
+  totalCents: number;
+  itemCount: number;
+  strength: 'exact' | 'same-day';
+}
+
+export async function findDuplicateBill(
+  db: SqlDriver,
+  candidate: DuplicateCandidate
+): Promise<DuplicateMatch | null> {
+  if (candidate.totalCents == null) return null;
+
+  const rows = await db.all<{
+    id: number;
+    merchant: string | null;
+    purchased_at: LocalDate;
+    purchased_time: string | null;
+    total_cents: number;
+    item_count: number;
+  }>(
+    `SELECT b.id, b.merchant, b.purchased_at, b.purchased_time, b.total_cents,
+            (SELECT COUNT(*) FROM bill_items i WHERE i.bill_id = b.id) AS item_count
+       FROM bills b
+      WHERE b.merchant_norm IS ?
+        AND b.purchased_at = ?
+        AND b.total_cents = ?
+        AND b.id IS NOT ?
+      ORDER BY b.id DESC`,
+    [
+      candidate.merchantNorm,
+      candidate.purchasedAt,
+      candidate.totalCents,
+      candidate.excludeBillId ?? null,
+    ]
+  );
+
+  if (rows.length === 0) return null;
+
+  const matches = rows.map((row) => ({
+    billId: row.id,
+    merchant: row.merchant,
+    purchasedAt: row.purchased_at,
+    purchasedTime: row.purchased_time,
+    totalCents: row.total_cents,
+    itemCount: row.item_count,
+    strength:
+      row.purchased_time === candidate.purchasedTime
+        ? ('exact' as const)
+        : ('same-day' as const),
+  }));
+
+  // The strongest match, and among equals the most recent — that is the one
+  // most likely to be the accidental re-scan.
+  return matches.find((match) => match.strength === 'exact') ?? matches[0];
 }
 
 /**

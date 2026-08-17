@@ -17,13 +17,15 @@
  */
 
 import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { centsToInput, formatMoney, parseCents } from '@/data/money';
 import { formatDate, isValidLocalDate } from '@/data/dates';
 import { getDb } from '@/data/db';
 import { saveReviewedReceipt } from '@/capture/saveReceipt';
+import { findDuplicateBill, type DuplicateMatch } from '@/data/ledgerRepo';
+import { normaliseMerchant } from '@/data/merchant';
 import type { ParsedItem } from '@/capture/parseContract';
 import { CATEGORIES, CATEGORY_LABELS, UNIT_LABELS } from '@/types/vocabulary';
 import { Button } from '@/ui/components/button';
@@ -63,6 +65,33 @@ export default function ReviewScreen() {
    * Worth saying out loud: an assumed date looks exactly like a read one.
    */
   const [dateWasMissing] = useState(() => parse?.receipt.purchased_at_assumed ?? false);
+
+  const [duplicate, setDuplicate] = useState<DuplicateMatch | null>(null);
+
+  /**
+   * Re-checked whenever the date changes, because the date is editable here
+   * and correcting it is exactly what turns a non-match into a match — the
+   * duplicate only becomes visible once both bills agree on the day.
+   */
+  useEffect(() => {
+    if (!parse) return;
+    let cancelled = false;
+
+    void (async () => {
+      const db = await getDb();
+      const match = await findDuplicateBill(db, {
+        merchantNorm: normaliseMerchant(parse.receipt.merchant),
+        purchasedAt: purchasedAt,
+        purchasedTime: parse.receipt.purchased_time,
+        totalCents: parse.receipt.total_cents,
+      });
+      if (!cancelled) setDuplicate(match);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [parse, purchasedAt]);
 
   const lowConfidenceCount = useMemo(
     () => items.filter((item, index) => item.confidence === 'low' && !excluded.has(index)).length,
@@ -170,6 +199,39 @@ export default function ReviewScreen() {
         </View>
 
         <FlagBanner flags={parse.flags} />
+
+        {/* Advisory, never blocking. §5.6 makes this screen the trust gate, and
+            two identical purchases are a real thing that must stay recordable —
+            so this offers a look at the other bill and leaves the decision. */}
+        {duplicate && (
+          <Pressable
+            onPress={() => router.push(`/bill/${duplicate.billId}`)}
+            accessibilityRole="button"
+            accessibilityLabel="You may already have this receipt. Opens the existing bill."
+            style={[
+              styles.attention,
+              { borderColor: theme.warning, backgroundColor: theme.backgroundElement },
+            ]}>
+            <ThemedText type="smallBold" themeColor="warning">
+              {duplicate.strength === 'exact'
+                ? 'You may already have this receipt.'
+                : 'A bill from the same shop, day and total is already recorded.'}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {duplicate.merchant ?? 'Unnamed merchant'} ·{' '}
+              {formatDate(duplicate.purchasedAt)}
+              {duplicate.purchasedTime ? ` at ${duplicate.purchasedTime}` : ''} ·{' '}
+              {formatMoney(duplicate.totalCents, receipt.currency)} ·{' '}
+              {duplicate.itemCount} item{duplicate.itemCount === 1 ? '' : 's'}
+              {duplicate.strength === 'same-day' && duplicate.purchasedTime
+                ? ' — a different time, so it may be a separate purchase.'
+                : ''}
+            </ThemedText>
+            <ThemedText type="small" themeColor="primary">
+              Tap to see it. Saving anyway will keep both.
+            </ThemedText>
+          </Pressable>
+        )}
 
         {/* The two fields the parse gets wrong in ways the item list cannot
             show: a date the receipt never printed, and an address one digit

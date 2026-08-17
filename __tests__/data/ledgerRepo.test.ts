@@ -16,8 +16,10 @@ import {
   updateBill,
   updateBillItem,
   confirmLowConfidenceItems,
+  findDuplicateBill,
 } from '@/data/ledgerRepo';
 import { migrate } from '@/data/migrate';
+import { normaliseMerchant } from '@/data/merchant';
 import type { NewBillInput } from '@/types/ledger';
 
 let db: SqlDriver;
@@ -546,5 +548,125 @@ describe('confirmLowConfidenceItems', () => {
     await confirmLowConfidenceItems(db, target);
 
     expect((await getBill(db, other))!.parseFlags).toContain('low_confidence');
+  });
+});
+
+/**
+ * Duplicate detection — not in the spec, added after watching the same
+ * PAK'nSAVE receipt land in the ledger twice.
+ *
+ * The line these hold is where a *warning* is justified. Two identical
+ * purchases are a real thing and must stay recordable, so this is advisory:
+ * over-warning trains people to ignore it, and under-warning lets a
+ * double-scan through silently.
+ */
+describe('findDuplicateBill', () => {
+  const dup = (overrides: Partial<NewBillInput> = {}): NewBillInput => ({
+    merchant: "PAK'nSAVE",
+    purchasedAt: '2026-07-19',
+    purchasedTime: '17:42',
+    totalCents: 3446,
+    source: 'receipt',
+    items: [{ name: 'Milk', category: 'dairy', priceCents: 3446 }],
+    ...overrides,
+  });
+
+  const candidateOf = (input: NewBillInput) => ({
+    merchantNorm: normaliseMerchant(input.merchant ?? null),
+    purchasedAt: input.purchasedAt,
+    purchasedTime: input.purchasedTime ?? null,
+    totalCents: input.totalCents ?? null,
+  });
+
+  it('finds the same shop, day, total and minute', async () => {
+    const first = await createBill(db, dup());
+    const match = await findDuplicateBill(db, candidateOf(dup()));
+
+    expect(match?.billId).toBe(first);
+    expect(match?.strength).toBe('exact');
+  });
+
+  /** Neither receipt printing a time is still an exact match on what exists. */
+  it('treats two untimed receipts as exact', async () => {
+    await createBill(db, dup({ purchasedTime: null }));
+    const match = await findDuplicateBill(db, candidateOf(dup({ purchasedTime: null })));
+
+    expect(match?.strength).toBe('exact');
+  });
+
+  /**
+   * The same lunch twice in one day is possible, so this is graded down rather
+   * than suppressed — the screen says the times differ and lets the user judge.
+   */
+  it('grades a different time down to same-day', async () => {
+    await createBill(db, dup({ purchasedTime: '08:15' }));
+    const match = await findDuplicateBill(db, candidateOf(dup({ purchasedTime: '17:42' })));
+
+    expect(match?.strength).toBe('same-day');
+  });
+
+  it('prefers an exact match over a same-day one', async () => {
+    await createBill(db, dup({ purchasedTime: '08:15' }));
+    const exact = await createBill(db, dup({ purchasedTime: '17:42' }));
+
+    const match = await findDuplicateBill(db, candidateOf(dup({ purchasedTime: '17:42' })));
+    expect(match?.billId).toBe(exact);
+    expect(match?.strength).toBe('exact');
+  });
+
+  it('does not match a different total', async () => {
+    await createBill(db, dup({ totalCents: 3446 }));
+    expect(await findDuplicateBill(db, candidateOf(dup({ totalCents: 3447 })))).toBeNull();
+  });
+
+  it('does not match a different day', async () => {
+    await createBill(db, dup({ purchasedAt: '2026-07-19' }));
+    expect(await findDuplicateBill(db, candidateOf(dup({ purchasedAt: '2026-07-20' })))).toBeNull();
+  });
+
+  it('does not match a different shop', async () => {
+    await createBill(db, dup({ merchant: "PAK'nSAVE" }));
+    expect(await findDuplicateBill(db, candidateOf(dup({ merchant: 'New World' })))).toBeNull();
+  });
+
+  /**
+   * §4.8 groups on the normalised name, so two spellings of one shop are one
+   * merchant — and a re-scan often reads the name slightly differently.
+   */
+  it('matches across spellings that normalise together', async () => {
+    const first = await createBill(db, dup({ merchant: "PAK'nSAVE" }));
+    const match = await findDuplicateBill(db, candidateOf(dup({ merchant: 'PAKnSAVE' })));
+
+    expect(match?.billId).toBe(first);
+  });
+
+  /** An illegible total (§4.3) is too weak to accuse anyone of double-scanning. */
+  it('never matches when the total is unknown', async () => {
+    await createBill(db, dup({ totalCents: null }));
+    expect(await findDuplicateBill(db, candidateOf(dup({ totalCents: null })))).toBeNull();
+  });
+
+  it('finds nothing in an empty ledger', async () => {
+    expect(await findDuplicateBill(db, candidateOf(dup()))).toBeNull();
+  });
+
+  /** Editing a bill must not report the bill itself as its own duplicate. */
+  it('excludes the bill being edited', async () => {
+    const id = await createBill(db, dup());
+    const match = await findDuplicateBill(db, { ...candidateOf(dup()), excludeBillId: id });
+
+    expect(match).toBeNull();
+  });
+
+  it('reports enough to identify the other bill on screen', async () => {
+    await createBill(db, dup({ items: [
+      { name: 'A', category: 'dairy', priceCents: 1723 },
+      { name: 'B', category: 'dairy', priceCents: 1723 },
+    ] }));
+
+    const match = await findDuplicateBill(db, candidateOf(dup()));
+    expect(match?.merchant).toBe("PAK'nSAVE");
+    expect(match?.totalCents).toBe(3446);
+    expect(match?.itemCount).toBe(2);
   });
 });
