@@ -1,4 +1,14 @@
-import { formatDate, isValidLocalDate, isValidLocalTime, monthOf, todayLocalDate } from '@/data/dates';
+import {
+  addDays,
+  endOfYear,
+  formatDate,
+  isValidLocalDate,
+  isValidLocalTime,
+  monthOf,
+  startOfWeek,
+  startOfYear,
+  todayLocalDate,
+} from '@/data/dates';
 
 describe('isValidLocalDate (spec §4.3)', () => {
   it('accepts real calendar dates', () => {
@@ -64,5 +74,47 @@ describe('formatDate', () => {
 describe('monthOf', () => {
   it('extracts the grouping key', () => {
     expect(monthOf('2026-07-19')).toBe('2026-07');
+  });
+});
+
+describe('addDays (§14.6 windows)', () => {
+  it('walks forwards and backwards', () => {
+    expect(addDays('2026-09-07', 3)).toBe('2026-09-10');
+    expect(addDays('2026-09-07', -8)).toBe('2026-08-30');
+  });
+
+  it('crosses month, year and leap-day boundaries', () => {
+    expect(addDays('2026-01-01', -1)).toBe('2025-12-31');
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDays('2024-02-28', 1)).toBe('2024-02-29');
+    expect(addDays('2025-02-28', 1)).toBe('2025-03-01');
+  });
+
+  it('is a no-op on something that is not a date', () => {
+    expect(addDays('not-a-date' as never, 1)).toBe('not-a-date');
+  });
+});
+
+describe('startOfWeek', () => {
+  /**
+   * Monday, to agree with SQLite's `strftime('%W')` — the grouping §14.6 uses
+   * for a `week` dimension. A Sunday-start window would put a Sunday bill
+   * inside the range but outside every bucket.
+   */
+  it('returns the Monday of the containing week', () => {
+    expect(startOfWeek('2026-09-07')).toBe('2026-09-07'); // a Monday
+    expect(startOfWeek('2026-09-13')).toBe('2026-09-07'); // the Sunday after
+    expect(startOfWeek('2026-09-08')).toBe('2026-09-07');
+  });
+
+  it('crosses a month boundary backwards', () => {
+    expect(startOfWeek('2026-09-02')).toBe('2026-08-31');
+  });
+});
+
+describe('year edges', () => {
+  it('bounds the calendar year', () => {
+    expect(startOfYear('2026-09-07')).toBe('2026-01-01');
+    expect(endOfYear('2026-09-07')).toBe('2026-12-31');
   });
 });

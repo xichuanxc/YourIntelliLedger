@@ -127,3 +127,49 @@ export function periodOfLastMonths(count: number, endDate: LocalDate = todayLoca
     to: endOfMonth(endMonthKey),
   };
 }
+
+/**
+ * Shifts a local calendar date by whole days.
+ *
+ * `Date.UTC` and the UTC getters throughout, for the reason in this file's
+ * header: a `LocalDate` is a calendar label, and letting a local-timezone
+ * `Date` near it is how "yesterday" becomes "two days ago" for anyone east of
+ * Greenwich in daylight saving.
+ */
+export function addDays(date: LocalDate, delta: number): LocalDate {
+  const match = DATE_PATTERN.exec(date);
+  if (!match) return date;
+  const [, year, month, day] = match.map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + delta));
+  return todayLocalDateFromUtcParts(shifted);
+}
+
+function todayLocalDateFromUtcParts(value: Date): LocalDate {
+  const year = String(value.getUTCFullYear()).padStart(4, '0');
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(value.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * The Monday of the week containing `date`.
+ *
+ * Monday, because SQLite's `strftime('%W')` — what §14.6 groups a `week`
+ * dimension by — counts Monday-based weeks. A window that disagreed with the
+ * grouping would put a bill in the range but in no bucket.
+ */
+export function startOfWeek(date: LocalDate): LocalDate {
+  const match = DATE_PATTERN.exec(date);
+  if (!match) return date;
+  const [, year, month, day] = match.map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return addDays(date, -((weekday + 6) % 7));
+}
+
+export function startOfYear(date: LocalDate): LocalDate {
+  return `${date.slice(0, 4)}-01-01`;
+}
+
+export function endOfYear(date: LocalDate): LocalDate {
+  return `${date.slice(0, 4)}-12-31`;
+}
