@@ -4,83 +4,137 @@ import { ActivityIndicator, ScrollView, StyleSheet, View, useWindowDimensions } 
 import { BarChart } from 'react-native-gifted-charts';
 
 import {
+  formatDate,
+  formatDayMonth,
   formatMonth,
   formatMonthShort,
   monthOf,
   periodOfLastMonths,
+  periodOfLastWeeks,
   todayLocalDate,
   type Period,
 } from '@/data/dates';
 import { getDb } from '@/data/db';
 import {
   getCategoryBreakdown,
-  getLatestMonth,
+  getDataRange,
   getMerchantBreakdown,
   getMonthlyTrend,
   getSpendSummary,
+  getWeeklyTrend,
 } from '@/data/insightsRepo';
 import { formatMoney, formatMoneyCompact } from '@/data/money';
-import type { CategoryBreakdown, MerchantTotal, MonthTotal, SpendSummary } from '@/types/insights';
+import type { CategoryBreakdown, MerchantTotal, SpendSummary } from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
 import type { BreakdownDimension } from '@/app/insights/breakdown';
 import { DonutBreakdown } from '@/ui/components/donut-breakdown';
 import type { SliceInput } from '@/ui/chartSlices';
-import { ChipSelect } from '@/ui/components/chip-select';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
+import { SelectMenu } from '@/ui/components/select-menu';
 import { StatTile } from '@/ui/components/stat-tile';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { MaxContentWidth, Radius, Spacing } from '@/ui/theme';
 
-const RANGES = ['1', '3', '12'] as const;
-type RangeKey = (typeof RANGES)[number];
+/**
+ * The periods on offer.
+ *
+ * A ladder rather than a set: each step is roughly three times the last, so
+ * six options cover a week to a year without two of them answering the same
+ * question. The unit is part of the range, not a second control — "last 4
+ * weeks" and "last 3 months" are one choice for the user, and splitting them
+ * into a unit and a count would make picking a period a two-step job.
+ */
+const RANGES = [
+  { value: 'w1', label: 'This week', unit: 'week', count: 1 },
+  { value: 'w4', label: 'Last 4 weeks', unit: 'week', count: 4 },
+  { value: 'm1', label: 'This month', unit: 'month', count: 1 },
+  { value: 'm3', label: 'Last 3 months', unit: 'month', count: 3 },
+  { value: 'm6', label: 'Last 6 months', unit: 'month', count: 6 },
+  { value: 'm12', label: 'Last 12 months', unit: 'month', count: 12 },
+] as const satisfies readonly { value: string; label: string; unit: 'week' | 'month'; count: number }[];
 
-const RANGE_LABELS: Record<RangeKey, string> = {
-  '1': 'This month',
-  '3': 'Last 3 months',
-  '12': 'Last 12 months',
-};
+type RangeKey = (typeof RANGES)[number]['value'];
+
+const RANGE_OPTIONS = RANGES.map(({ value, label }) => ({ value, label }));
+
+function rangeOf(key: RangeKey) {
+  return RANGES.find((range) => range.value === key) ?? RANGES[3];
+}
+
+/** One bar of the trend chart, whichever unit produced it. */
+interface TrendBar {
+  /** The axis label — a month abbreviation, or the week's Monday. */
+  label: string;
+  totalCents: number;
+}
 
 interface InsightsData {
   summary: SpendSummary;
   breakdown: CategoryBreakdown;
   merchants: MerchantTotal[];
-  trend: MonthTotal[];
+  trend: TrendBar[];
   period: Period;
   hasAnyBills: boolean;
+  /** What the trend is counting, for the section heading. */
+  trendUnit: 'week' | 'month';
 }
 
 export default function InsightsScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
 
-  const [range, setRange] = useState<RangeKey>('3');
+  const [range, setRange] = useState<RangeKey>('m3');
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const months = Number(range);
+  const { unit, count } = rangeOf(range);
 
   const load = useCallback(async () => {
     const db = await getDb();
 
-    // Anchor on the newest month that has data, not on today: a ledger whose
-    // last bill was two months ago should still show something rather than an
-    // empty "this month".
-    const latest = await getLatestMonth(db);
-    const anchorMonth = latest ?? monthOf(todayLocalDate());
-    const period = periodOfLastMonths(months, `${anchorMonth}-01`);
+    // Anchor on the newest bill, not on today: a ledger whose last bill was
+    // two months ago should still show something rather than an empty "this
+    // month". Weeks need the day, not just the month, so this reads the range
+    // rather than `getLatestMonth`.
+    const dataRange = await getDataRange(db);
+    const anchorDate = dataRange.lastBill ?? todayLocalDate();
+    const period =
+      unit === 'week'
+        ? periodOfLastWeeks(count, anchorDate)
+        : periodOfLastMonths(count, anchorDate);
 
     const [summary, breakdown, merchants, trend] = await Promise.all([
       getSpendSummary(db, period),
       getCategoryBreakdown(db, period),
       getMerchantBreakdown(db, period, 6),
-      getMonthlyTrend(db, months, anchorMonth),
+      unit === 'week'
+        ? getWeeklyTrend(db, count, anchorDate).then((weeks) =>
+            weeks.map((week) => ({
+              label: formatDayMonth(week.weekStart),
+              totalCents: week.totalCents,
+            }))
+          )
+        : getMonthlyTrend(db, count, monthOf(anchorDate)).then((months) =>
+            months.map((month) => ({
+              label: formatMonthShort(month.month),
+              totalCents: month.totalCents,
+            }))
+          ),
     ]);
 
-    setData({ summary, breakdown, merchants, trend, period, hasAnyBills: latest !== null });
+    setData({
+      summary,
+      breakdown,
+      merchants,
+      trend,
+      period,
+      hasAnyBills: dataRange.lastBill !== null,
+      trendUnit: unit,
+    });
     setLoading(false);
-  }, [months]);
+  }, [unit, count]);
 
   useFocusEffect(
     useCallback(() => {
@@ -92,16 +146,16 @@ export default function InsightsScreen() {
 
   const chart = useMemo(() => {
     if (!data) return null;
-    const max = Math.max(...data.trend.map((m) => m.totalCents), 0);
+    const max = Math.max(...data.trend.map((bar) => bar.totalCents), 0);
     const step = max > 0 ? Math.ceil(max / 4) : 1;
     return {
       max: step * 4,
       labels: Array.from({ length: 5 }, (_, i) =>
         formatMoneyCompact(step * i, data.summary.currency)
       ),
-      bars: data.trend.map((month) => ({
-        value: month.totalCents / 100,
-        label: formatMonthShort(month.month),
+      bars: data.trend.map((bar) => ({
+        value: bar.totalCents / 100,
+        label: bar.label,
         frontColor: theme.primary,
       })),
     };
@@ -188,17 +242,14 @@ export default function InsightsScreen() {
     <Screen>
       <Header />
       <ScrollView contentContainerStyle={styles.content}>
-        <ChipSelect
-          label="Period"
-          options={RANGES}
-          labels={RANGE_LABELS}
-          value={range}
-          onChange={setRange}
-          scroll
-        />
+        <SelectMenu label="Period" options={RANGE_OPTIONS} value={range} onChange={setRange} />
 
         <ThemedText type="small" themeColor="textSecondary">
-          {formatMonth(monthOf(period.from))} – {formatMonth(monthOf(period.to))}
+          {/* Whole days for a week range: "September 2026 – September 2026" is
+              both wrong-looking and less informative than the dates. */}
+          {data.trendUnit === 'week'
+            ? `${formatDayMonth(period.from)} – ${formatDate(period.to)}`
+            : `${formatMonth(monthOf(period.from))} – ${formatMonth(monthOf(period.to))}`}
         </ThemedText>
 
         {summary.billCount === 0 ? (
@@ -224,7 +275,7 @@ export default function InsightsScreen() {
               />
             </View>
 
-            <Section title="Month by month">
+            <Section title={data.trendUnit === 'week' ? 'Week by week' : 'Month by month'}>
               <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
                 <BarChart
                   data={chart.bars}

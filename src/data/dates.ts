@@ -166,6 +166,35 @@ export function startOfWeek(date: LocalDate): LocalDate {
   return addDays(date, -((weekday + 6) % 7));
 }
 
+/** The Sunday of the week containing `date`. See `startOfWeek`. */
+export function endOfWeek(date: LocalDate): LocalDate {
+  return addDays(startOfWeek(date), 6);
+}
+
+/**
+ * The period covering `count` whole weeks up to and including the week of
+ * `endDate` — "the last 4 weeks" is four calendar weeks, not 28 days.
+ *
+ * Whole weeks including the current incomplete one, matching
+ * `periodOfLastMonths`. Two conventions would put the same bill in two
+ * different "this week"s depending on which screen asked.
+ */
+export function periodOfLastWeeks(count: number, endDate: LocalDate = todayLocalDate()): Period {
+  const thisWeek = startOfWeek(endDate);
+  return { from: addDays(thisWeek, -7 * (count - 1)), to: addDays(thisWeek, 6) };
+}
+
+/** The Mondays of the `count` weeks ending with `endDate`'s week, oldest first. */
+export function weekSequence(endDate: LocalDate, count: number): LocalDate[] {
+  const thisWeek = startOfWeek(endDate);
+  return Array.from({ length: count }, (_, index) => addDays(thisWeek, -7 * (count - 1 - index)));
+}
+
+/** `'2026-09-07'` → `'7 Sep'`, for a weekly chart's axis where space is tight. */
+export function formatDayMonth(date: LocalDate): string {
+  return formatDate(date, { day: 'numeric', month: 'short' });
+}
+
 export function startOfYear(date: LocalDate): LocalDate {
   return `${date.slice(0, 4)}-01-01`;
 }

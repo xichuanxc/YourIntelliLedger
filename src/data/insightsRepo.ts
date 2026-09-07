@@ -14,7 +14,15 @@
  */
 
 import type { Period } from '@/data/dates';
-import { addMonths, endOfMonth, monthOf, monthSequence, startOfMonth } from '@/data/dates';
+import {
+  addMonths,
+  endOfMonth,
+  monthOf,
+  monthSequence,
+  periodOfLastWeeks,
+  startOfMonth,
+  weekSequence,
+} from '@/data/dates';
 import type { SqlDriver, SqlValue } from '@/data/driver';
 import type { LocalDate } from '@/types/ledger';
 import type {
@@ -27,6 +35,7 @@ import type {
   MonthTotal,
   SpendSummary,
   UnitemisedBill,
+  WeekTotal,
 } from '@/types/insights';
 import type { Category, Unit } from '@/types/vocabulary';
 
@@ -202,6 +211,51 @@ export async function getMonthlyTrend(
     month,
     totalCents: byMonth.get(month)?.total_cents ?? 0,
     billCount: byMonth.get(month)?.bill_count ?? 0,
+  }));
+}
+
+/**
+ * The same shape as `getMonthlyTrend`, in weeks — what a "last 4 weeks" range
+ * needs, where a monthly chart would be one bar and say nothing.
+ *
+ * The bucket key is computed in SQL as the Monday of each bill's week:
+ * `date(X,'weekday 0')` moves to that week's Sunday (staying put if it already
+ * is one), and six days back from there is the Monday. Deliberately not
+ * `strftime('%W')` — that counts weeks within a year, so the last week of
+ * December and the first of January become different buckets for days in the
+ * same week, and week 00 is a partial one.
+ *
+ * Empty weeks come back as zeroes rather than being missing, so the chart has
+ * a bar for every week in the range and a quiet fortnight looks like a gap in
+ * spending instead of a gap in the axis.
+ */
+export async function getWeeklyTrend(
+  db: SqlDriver,
+  weeks: number,
+  endDate: LocalDate
+): Promise<WeekTotal[]> {
+  const period = periodOfLastWeeks(weeks, endDate);
+
+  const rows = await db.all<{
+    week_start: string;
+    total_cents: number | null;
+    bill_count: number;
+  }>(
+    `SELECT date(purchased_at, 'weekday 0', '-6 days') AS week_start,
+            SUM(total_cents) AS total_cents,
+            COUNT(*) AS bill_count
+       FROM bills
+      WHERE purchased_at BETWEEN ? AND ?
+      GROUP BY week_start`,
+    [period.from, period.to]
+  );
+
+  const byWeek = new Map(rows.map((row) => [row.week_start, row]));
+
+  return weekSequence(endDate, weeks).map((weekStart) => ({
+    weekStart,
+    totalCents: byWeek.get(weekStart)?.total_cents ?? 0,
+    billCount: byWeek.get(weekStart)?.bill_count ?? 0,
   }));
 }
 

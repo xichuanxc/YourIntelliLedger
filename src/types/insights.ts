@@ -100,6 +100,13 @@ export interface UnitemisedBill {
   remainderCents: number;
 }
 
+/** One bar of a weekly trend. `weekStart` is the Monday (see `startOfWeek`). */
+export interface WeekTotal {
+  weekStart: LocalDate;
+  totalCents: number;
+  billCount: number;
+}
+
 export interface MonthTotal {
   /** `'YYYY-MM'`. */
   month: string;

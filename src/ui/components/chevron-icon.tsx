@@ -22,3 +22,20 @@ export function ChevronRightIcon({ size = 14, color }: { size?: number; color?: 
     </Svg>
   );
 }
+
+/** The "this opens a list" affordance, for a closed menu. */
+export function ChevronDownIcon({ size = 14, color }: { size?: number; color?: string }) {
+  const theme = useTheme();
+
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m5 9 7 7 7-7"
+        stroke={color ?? theme.textSecondary}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}

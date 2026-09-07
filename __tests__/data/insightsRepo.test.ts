@@ -11,6 +11,7 @@ import {
   getMerchantBreakdown,
   getMonthlyTrend,
   getSpendSummary,
+  getWeeklyTrend,
   getUnitemisedBills,
 } from '@/data/insightsRepo';
 import { createBill } from '@/data/ledgerRepo';
@@ -476,5 +477,57 @@ describe('getUnitemisedBills', () => {
   it('is empty when everything in the period is fully itemised', async () => {
     await createBill(db, bill({ totalCents: 1000, items: [{ name: 'Milk', category: 'dairy', priceCents: 1000 }] }));
     expect(await getUnitemisedBills(db, JULY)).toEqual([]);
+  });
+});
+
+/**
+ * Weeks run Monday to Sunday, matching `startOfWeek` and the Monday key the
+ * query computes. 2026-09-07 is a Monday, so the fixtures below sit either
+ * side of a boundary on purpose.
+ */
+describe('getWeeklyTrend', () => {
+  it('buckets bills into Monday-start weeks', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-09-07', totalCents: 1000 })); // Mon
+    await createBill(db, bill({ purchasedAt: '2026-09-13', totalCents: 500 })); // Sun, same week
+    await createBill(db, bill({ purchasedAt: '2026-09-14', totalCents: 300 })); // Mon, next week
+
+    const trend = await getWeeklyTrend(db, 2, '2026-09-14');
+    expect(trend).toEqual([
+      { weekStart: '2026-09-07', totalCents: 1500, billCount: 2 },
+      { weekStart: '2026-09-14', totalCents: 300, billCount: 1 },
+    ]);
+  });
+
+  it('returns a zero bar for a week with no bills rather than omitting it', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-09-14', totalCents: 300 }));
+
+    const trend = await getWeeklyTrend(db, 3, '2026-09-14');
+    expect(trend.map((week) => week.totalCents)).toEqual([0, 0, 300]);
+    expect(trend.map((week) => week.weekStart)).toEqual([
+      '2026-08-31',
+      '2026-09-07',
+      '2026-09-14',
+    ]);
+  });
+
+  /**
+   * The reason the query does not use `strftime('%W')`: that counts weeks
+   * within a year, so 31 December and 1 January land in different buckets even
+   * when they are the same Monday-to-Sunday week.
+   */
+  it('keeps a week that straddles new year in one bucket', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-12-31', totalCents: 400 })); // Thu
+    await createBill(db, bill({ purchasedAt: '2027-01-01', totalCents: 600 })); // Fri
+
+    const trend = await getWeeklyTrend(db, 1, '2027-01-01');
+    expect(trend).toEqual([{ weekStart: '2026-12-28', totalCents: 1000, billCount: 2 }]);
+  });
+
+  it('excludes bills outside the window', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-09-06', totalCents: 999 })); // Sun before
+    await createBill(db, bill({ purchasedAt: '2026-09-08', totalCents: 100 }));
+
+    const trend = await getWeeklyTrend(db, 1, '2026-09-08');
+    expect(trend).toEqual([{ weekStart: '2026-09-07', totalCents: 100, billCount: 1 }]);
   });
 });

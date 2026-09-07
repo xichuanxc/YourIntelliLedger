@@ -1,5 +1,9 @@
 import {
   addDays,
+  endOfWeek,
+  formatDayMonth,
+  periodOfLastWeeks,
+  weekSequence,
   endOfYear,
   formatDate,
   isValidLocalDate,
@@ -116,5 +120,41 @@ describe('year edges', () => {
   it('bounds the calendar year', () => {
     expect(startOfYear('2026-09-07')).toBe('2026-01-01');
     expect(endOfYear('2026-09-07')).toBe('2026-12-31');
+  });
+});
+
+describe('weekly periods', () => {
+  it('bounds the week containing a date', () => {
+    expect(endOfWeek('2026-09-07')).toBe('2026-09-13'); // Mon -> Sun
+    expect(endOfWeek('2026-09-13')).toBe('2026-09-13');
+  });
+
+  /**
+   * Whole calendar weeks including the current incomplete one, matching
+   * `periodOfLastMonths`. Two conventions would put the same bill in two
+   * different "this week"s depending on which screen asked.
+   */
+  it('covers whole weeks, current one included', () => {
+    expect(periodOfLastWeeks(1, '2026-09-09')).toEqual({ from: '2026-09-07', to: '2026-09-13' });
+    expect(periodOfLastWeeks(4, '2026-09-09')).toEqual({ from: '2026-08-17', to: '2026-09-13' });
+  });
+
+  it('lists the Mondays oldest first', () => {
+    expect(weekSequence('2026-09-09', 3)).toEqual(['2026-08-24', '2026-08-31', '2026-09-07']);
+  });
+
+  it('crosses a year boundary without resetting', () => {
+    expect(weekSequence('2027-01-01', 2)).toEqual(['2026-12-21', '2026-12-28']);
+  });
+
+  /**
+   * The month's spelling comes from the device locale via `Intl` (§7), so the
+   * assertion is about shape — day, abbreviated month, no year — rather than
+   * about one locale's abbreviation. Node renders September as "Sept" here.
+   */
+  it('formats a week label as a day and month, without the year', () => {
+    const label = formatDayMonth('2026-09-07');
+    expect(label).toMatch(/^7 [A-Za-z]{3,5}$/);
+    expect(label).not.toContain('2026');
   });
 });
