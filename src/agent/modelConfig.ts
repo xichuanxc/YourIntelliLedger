@@ -31,6 +31,8 @@
 
 import { createMMKV, type MMKV } from 'react-native-mmkv';
 
+import { bareModel } from '@/agent/aliasValue';
+
 /**
  * Stage A has no `hub-dev` / `hub` split (§13's base URLs) because there is one
  * Worker and no custom domain yet. When that changes, select on `__DEV__`.
@@ -131,8 +133,14 @@ export async function refreshHubConfig(fetchImpl: typeof fetch = fetch): Promise
  * A *stale* cache is used deliberately rather than discarded: yesterday's
  * answer from the hub is better than a default that predates it.
  */
+/**
+ * The concrete model for an alias, with §13.4's provider prefix dropped — see
+ * `aliasValue.ts`. This path talks to Google directly, so it needs the model
+ * name and not the provider that serves it.
+ */
 export function modelForAlias(alias: ModelAlias): string {
-  return readCache()?.config.aliases[alias] ?? BUILTIN_DEFAULTS[alias];
+  const configured = readCache()?.config.aliases[alias];
+  return configured ? bareModel(configured) : BUILTIN_DEFAULTS[alias];
 }
 
 /** Whether the alias table came from the hub — for Settings to show honestly. */
