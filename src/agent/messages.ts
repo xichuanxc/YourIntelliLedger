@@ -20,6 +20,22 @@ export interface ToolCall {
     /** JSON text, as produced by the model. Parse defensively. */
     arguments: string;
   };
+  /**
+   * An opaque token the provider attaches to a tool call and requires back,
+   * verbatim, when the conversation continues.
+   *
+   * Gemini 3 signs the reasoning behind a function call and refuses the next
+   * turn without it — *"Function call is missing a thought_signature in
+   * functionCall parts"* — which is a second-turn failure, so a single-turn
+   * test cannot catch it.
+   *
+   * It is provider-specific and does not belong in an OpenAI-shaped message,
+   * but it has nowhere else to live: the app sends the whole conversation on
+   * every turn (§6.3), so anything the provider needs back has to survive a
+   * round trip through the client. Treated as opaque — never parsed, never
+   * shortened, never regenerated.
+   */
+  thought_signature?: string;
 }
 
 export type ChatMessage =

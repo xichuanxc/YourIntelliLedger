@@ -102,6 +102,12 @@ interface GeminiPart {
   text?: string;
   functionCall?: { name: string; args?: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
+  /**
+   * Gemini 3's signature over the reasoning behind a part. camelCase because
+   * that is what the REST API emits; the error message names the proto field,
+   * `thought_signature`, which is the same thing.
+   */
+  thoughtSignature?: string;
 }
 
 interface GeminiContent {
@@ -175,6 +181,10 @@ export function toGeminiRequest(
         for (const call of message.tool_calls ?? []) {
           parts.push({
             functionCall: { name: call.function.name, args: safeArgs(call.function.arguments) },
+            // Returned exactly as it arrived. Gemini 3 refuses the next turn
+            // without it, and it is signed, so there is nothing to construct
+            // if it is missing — only a turn to lose.
+            ...(call.thought_signature ? { thoughtSignature: call.thought_signature } : {}),
           });
         }
         if (parts.length > 0) contents.push({ role: 'model', parts });
@@ -268,6 +278,7 @@ export function fromGeminiResponse(body: GeminiResponseBody): ChatReply {
         name: part.functionCall!.name,
         arguments: JSON.stringify(part.functionCall!.args ?? {}),
       },
+      ...(part.thoughtSignature ? { thought_signature: part.thoughtSignature } : {}),
     }));
 
   return {

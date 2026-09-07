@@ -249,3 +249,94 @@ describe('the response', () => {
     });
   });
 });
+
+/**
+ * Gemini 3 signs the reasoning behind a function call and refuses the *next*
+ * turn if the signature does not come back — which is why the first live
+ * question failed after the tool had already run, and why none of the
+ * single-turn tests above could have caught it.
+ */
+describe('thought signatures survive the round trip', () => {
+  it('reads the signature off a function call', () => {
+    const reply = fromGeminiResponse({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                functionCall: { name: 'query_ledger', args: { metric: 'count' } },
+                thoughtSignature: 'Ct0BAbc123==',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    expect(reply.message.tool_calls?.[0].thought_signature).toBe('Ct0BAbc123==');
+  });
+
+  it('sends it back verbatim on the next turn', () => {
+    const body = toGeminiRequest(
+      request({
+        messages: [
+          { role: 'user', content: 'how much?' },
+          {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'c1',
+                type: 'function',
+                function: { name: 'query_ledger', arguments: '{"metric":"count"}' },
+                thought_signature: 'Ct0BAbc123==',
+              },
+            ],
+          },
+          { role: 'tool', tool_call_id: 'c1', content: '{"row_count":1}' },
+        ],
+      }),
+      {}
+    );
+    expect(body.contents[1].parts[0]).toEqual({
+      functionCall: { name: 'query_ledger', args: { metric: 'count' } },
+      thoughtSignature: 'Ct0BAbc123==',
+    });
+  });
+
+  it('omits the field entirely when there is none, rather than sending null', () => {
+    const body = toGeminiRequest(
+      request({
+        messages: [
+          {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              { id: 'c1', type: 'function', function: { name: 'query_ledger', arguments: '{}' } },
+            ],
+          },
+        ],
+      }),
+      {}
+    );
+    expect(body.contents[0].parts[0]).not.toHaveProperty('thoughtSignature');
+  });
+
+  it('keeps signatures with their own calls when a turn makes two', () => {
+    const reply = fromGeminiResponse({
+      candidates: [
+        {
+          content: {
+            parts: [
+              { functionCall: { name: 'query_ledger' }, thoughtSignature: 'first' },
+              { functionCall: { name: 'get_bill_detail' }, thoughtSignature: 'second' },
+            ],
+          },
+        },
+      ],
+    });
+    expect(reply.message.tool_calls?.map((call) => call.thought_signature)).toEqual([
+      'first',
+      'second',
+    ]);
+  });
+});
