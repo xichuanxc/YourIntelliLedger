@@ -26,7 +26,7 @@
  */
 
 import type { ChatTransport } from '@/agent/chatTransport';
-import { getByokKey } from '@/agent/byokKey';
+import { getAskKey } from '@/agent/byokKey';
 import type { ChatReply, ChatRequest, HubMeta } from '@/agent/messages';
 import { HUB_BASE_URL } from '@/agent/modelConfig';
 import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
@@ -76,7 +76,7 @@ export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTra
     name: 'hub-chat',
 
     async chat(request: ChatRequest): Promise<ChatReply> {
-      const key = await getByokKey();
+      const key = await getAskKey();
       if (!key) {
         throw new TransportUnavailableError(
           'No API key is set. Add one in Settings to ask questions about your spending.'

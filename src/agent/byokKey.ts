@@ -12,6 +12,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 const KEY = 'byok.provider.key';
+const ASK_KEY = 'byok.ask.key';
 const MODEL_KEY = 'byok.provider.model';
 
 /** The prototype's model, whose output §5.7's accuracy figures were measured on. */
@@ -32,6 +33,43 @@ export async function setByokKey(key: string): Promise<void> {
 
 export async function clearByokKey(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY);
+}
+
+/**
+ * The key Ask sends to the hub, which forwards it to whichever provider the
+ * §13.5 alias table names.
+ *
+ * A second key because the two features can now reach different companies:
+ * receipt parsing goes straight to Google, while `chat-fast` may be pointed at
+ * DeepSeek in the Worker's config. One field would mean choosing which of the
+ * two to break.
+ *
+ * **Falls back to the parse key when unset.** Almost everyone is running both
+ * on Gemini with one key, and requiring a second before Ask would work again
+ * would be a setup step imposed on people who did not ask for a second
+ * provider. Setting this is only necessary once the two differ.
+ */
+export async function getAskKey(): Promise<string | null> {
+  return (await SecureStore.getItemAsync(ASK_KEY)) ?? (await getByokKey());
+}
+
+/** Whether a distinct Ask key has been set, as opposed to inherited. */
+export async function hasOwnAskKey(): Promise<boolean> {
+  return (await SecureStore.getItemAsync(ASK_KEY)) !== null;
+}
+
+export async function setAskKey(key: string): Promise<void> {
+  const trimmed = key.trim();
+  if (trimmed === '') {
+    await clearAskKey();
+    return;
+  }
+  await SecureStore.setItemAsync(ASK_KEY, trimmed);
+}
+
+/** Clearing hands Ask back to the parse key rather than leaving it keyless. */
+export async function clearAskKey(): Promise<void> {
+  await SecureStore.deleteItemAsync(ASK_KEY);
 }
 
 /**

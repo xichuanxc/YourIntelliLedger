@@ -10,12 +10,15 @@ import { createHubChatTransport } from '@/agent/hubChatTransport';
 import type { ChatRequest } from '@/agent/messages';
 import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
 
+// `getAskKey`, not `getByokKey`: Ask has its own key now, because the hub may
+// be pointed at a different provider from the one receipt parsing uses
+// (§13.5). It falls back to the receipt key, which is why one key still works.
 jest.mock('@/agent/byokKey', () => ({
-  getByokKey: jest.fn(async () => 'test-key'),
+  getAskKey: jest.fn(async () => 'test-key'),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { getByokKey } = require('@/agent/byokKey') as { getByokKey: jest.Mock };
+const { getAskKey } = require('@/agent/byokKey') as { getAskKey: jest.Mock };
 
 const request: ChatRequest = {
   model: 'chat-fast',
@@ -30,7 +33,7 @@ function stub(body: unknown, status = 200): jest.Mock {
 const answer = { message: { content: '{"text":"You spent $12."}' }, hub_meta: { model_used: 'x' } };
 
 beforeEach(() => {
-  getByokKey.mockResolvedValue('test-key');
+  getAskKey.mockResolvedValue('test-key');
 });
 
 describe('the request', () => {
@@ -44,7 +47,7 @@ describe('the request', () => {
     expect(init.body).not.toContain('gemini');
   });
 
-  it('carries the key in X-BYOK, which phase 1 still needs', async () => {
+  it('carries the Ask key in X-BYOK, which phase 1 still needs', async () => {
     const fetchImpl = stub(answer);
     await createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(request);
     expect(fetchImpl.mock.calls[0][1].headers['X-BYOK']).toBe('test-key');
@@ -62,7 +65,7 @@ describe('the request', () => {
 
 describe('failures the user can act on', () => {
   it('asks for a key when none is stored', async () => {
-    getByokKey.mockResolvedValue(null);
+    getAskKey.mockResolvedValue(null);
     const fetchImpl = stub(answer);
     await expect(
       createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(request)

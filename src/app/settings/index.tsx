@@ -17,10 +17,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import {
+  clearAskKey,
   clearByokKey,
+  getAskKey,
   getByokKey,
   getByokModel,
+  hasOwnAskKey,
   maskKey,
+  setAskKey,
   setByokKey,
   setByokModel,
 } from '@/agent/byokKey';
@@ -47,6 +51,9 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const [existing, setExisting] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [askKey, setAskKeyState] = useState<string | null>(null);
+  const [askOwn, setAskOwn] = useState(false);
+  const [askDraft, setAskDraft] = useState('');
   const [model, setModel] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,6 +66,8 @@ export default function SettingsScreen() {
   useEffect(() => {
     void (async () => {
       setExisting(await getByokKey());
+      setAskKeyState(await getAskKey());
+      setAskOwn(await hasOwnAskKey());
       setModel(await getByokModel());
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
@@ -77,8 +86,12 @@ export default function SettingsScreen() {
     try {
       await setByokKey(draft);
       await setByokModel(model);
+      if (askDraft.trim() !== '') await setAskKey(askDraft);
       setExisting(await getByokKey());
+      setAskKeyState(await getAskKey());
+      setAskOwn(await hasOwnAskKey());
       setDraft('');
+      setAskDraft('');
       setStatus('Saved.');
     } finally {
       setBusy(false);
@@ -107,10 +120,10 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Section title="Reading receipts">
           <ThemedText type="small" themeColor="textSecondary">
-            Reading a receipt sends its <ThemedText type="smallBold">text</ThemedText> to an AI
-            provider — and the photograph as well, if you switch that on below. Never your bills,
-            totals or history. Apart from this and map previews, nothing leaves the device. Until
-            the app ships its own service you supply a key, which is kept in the device keystore.
+            Reading a receipt sends its <ThemedText type="smallBold">text</ThemedText> straight to
+            an AI provider — and the photograph as well, if you switch that on below. Never your
+            bills, totals or history. You supply the key, which is kept in the device keystore and
+            is never included in an export.
           </ThemedText>
 
           <ThemedText type="smallBold">
@@ -118,7 +131,7 @@ export default function SettingsScreen() {
           </ThemedText>
 
           <TextField
-            label={existing ? 'Replace key' : 'Google AI Studio API key'}
+            label={existing ? 'Replace key' : 'Provider API key'}
             value={draft}
             onChangeText={setDraft}
             placeholder="Paste your key"
@@ -156,6 +169,63 @@ export default function SettingsScreen() {
                   setExisting(null);
                   setDraft('');
                   setStatus('Key removed. Receipts can still be entered by hand.');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          )}
+        </Section>
+
+        {/*
+          §8.2 requires Settings to say which service is active, and §9.1
+          requires this to match the data-safety declaration. Ask no longer
+          talks to a provider directly — it goes through the project's own
+          Worker — and a screen that did not say so would be under-describing
+          where a user's question goes.
+        */}
+        <Section title="Ask">
+          <ThemedText type="small" themeColor="textSecondary">
+            Asking a question sends the question itself, plus a short summary of
+            what is in your ledger — the categories, your most frequent shops, the
+            date range and the number of bills. Amounts reach the assistant only
+            when they are part of an answer it looked up. It goes through this
+            project&rsquo;s own service, which chooses the model and records no
+            message content, and on to the AI provider from there.
+          </ThemedText>
+
+          <ThemedText type="smallBold">
+            {askKey
+              ? askOwn
+                ? `Key set — ${maskKey(askKey)}`
+                : `Using the receipt key — ${maskKey(askKey)}`
+              : 'No key set'}
+          </ThemedText>
+
+          <TextField
+            label={askOwn ? 'Replace key' : 'Separate key for Ask'}
+            value={askDraft}
+            onChangeText={setAskDraft}
+            placeholder="Paste your key"
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            hint="Only needed when Ask uses a different provider from receipts. Leave blank to keep using the receipt key."
+          />
+
+          {askOwn && (
+            <Button
+              label="Use the receipt key instead"
+              variant="secondary"
+              busy={busy}
+              onPress={async () => {
+                setBusy(true);
+                try {
+                  await clearAskKey();
+                  setAskKeyState(await getAskKey());
+                  setAskOwn(false);
+                  setAskDraft('');
+                  setStatus('Ask is using the receipt key again.');
                 } finally {
                   setBusy(false);
                 }
