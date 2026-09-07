@@ -23,6 +23,7 @@ import { toolByName } from '@/agent/tools';
 import { validateToolCall, type ValidationContext } from '@/agent/validate';
 import type { SqlDriver } from '@/data/driver';
 import { getBill } from '@/data/ledgerRepo';
+import { unitBasisLabel, unitPriceOf, type UnitPriceInput } from '@/data/unitPrice';
 
 export interface ExecutionContext {
   db: SqlDriver;
@@ -119,13 +120,45 @@ function parseArguments(raw: string): { ok: true; value: unknown } | { ok: false
   }
 }
 
+/**
+ * Adds a comparable price to each item row.
+ *
+ * A shelf price cannot answer "which milk was better value" — that needs a
+ * common denominator, and §4.9 stores three different kinds of quantity, only
+ * one of which divides out directly. `unitPriceOf` reconciles them; `source`
+ * travels with the number because a rate read off a product name is a reading
+ * of packaging text, not a measurement, and the model should be able to say so
+ * rather than quoting it with the confidence of a printed rate.
+ */
+function withUnitPrices(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const rate = unitPriceOf({
+      name: String(row.name ?? ''),
+      nameLocal: typeof row.name_local === 'string' ? row.name_local : null,
+      qty: typeof row.qty === 'number' ? row.qty : 1,
+      unit: (row.unit ?? 'pc') as UnitPriceInput['unit'],
+      priceCents: typeof row.price_cents === 'number' ? row.price_cents : null,
+      unitPriceCents: typeof row.unit_price_cents === 'number' ? row.unit_price_cents : null,
+    });
+
+    if (!rate) return row;
+    return {
+      ...row,
+      unit_price_cents_each: rate.cents,
+      unit_price_basis: unitBasisLabel(rate.basis),
+      unit_price_source: rate.source,
+    };
+  });
+}
+
 async function runQuery(
   args: Parameters<typeof compileQuery>[0],
   notes: string[],
   context: ExecutionContext
 ): Promise<ExecutionResult> {
   const compiled = compileQuery(args);
-  const rows = await context.db.all<Record<string, unknown>>(compiled.sql, compiled.params);
+  const raw = await context.db.all<Record<string, unknown>>(compiled.sql, compiled.params);
+  const rows = compiled.shape === 'items' ? withUnitPrices(raw) : raw;
 
   return reply(
     {
@@ -166,15 +199,25 @@ async function runBillDetail(
       // this receipt do not add up to its total" rather than quietly picking
       // one of the two numbers.
       parse_flags: bill.parseFlags,
-      items: bill.items.map((item) => ({
-        id: item.id,
-        name: item.name,
-        name_local: item.nameLocal,
-        category: item.category,
-        qty: item.qty,
-        unit: item.unit,
-        price_cents: item.priceCents,
-      })),
+      items: bill.items.map((item) => {
+        const rate = unitPriceOf(item);
+        return {
+          id: item.id,
+          name: item.name,
+          name_local: item.nameLocal,
+          category: item.category,
+          qty: item.qty,
+          unit: item.unit,
+          price_cents: item.priceCents,
+          ...(rate
+            ? {
+                unit_price_cents_each: rate.cents,
+                unit_price_basis: unitBasisLabel(rate.basis),
+                unit_price_source: rate.source,
+              }
+            : {}),
+        };
+      }),
     },
     'ok',
     [

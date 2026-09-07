@@ -262,6 +262,10 @@ const ITEM_COLUMNS =
   'bill_items.id AS id, bill_items.bill_id AS bill_id, bill_items.name AS name, ' +
   'bill_items.name_local AS name_local, bill_items.category AS category, ' +
   'bill_items.qty AS qty, bill_items.unit AS unit, bill_items.price_cents AS price_cents, ' +
+  // The till's own rate, where the line had one (§4.9). Selected because it is
+  // the most trustworthy input to a comparable per-unit price and the only one
+  // that cannot be derived from anything else in the row.
+  'bill_items.unit_price_cents AS unit_price_cents, ' +
   'bills.purchased_at AS purchased_at, bills.merchant AS merchant';
 
 function shapeOf(query: ValidatedQuery): ResultShape {
