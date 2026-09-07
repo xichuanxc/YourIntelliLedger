@@ -161,35 +161,63 @@ export function unitPriceOf(item: UnitPriceInput): UnitPrice | null {
   }
 
   if (item.priceCents == null || item.priceCents < 0) return null;
+  const qty = item.qty > 0 ? item.qty : 1;
 
-  // 2. The stored quantity, where it is a real measure or a real count.
-  if (measure && item.qty > 0) {
-    const wanted = measure.basis !== 'item' || item.qty > 1;
-    if (wanted) {
-      return {
-        cents: round(item.priceCents / (item.qty * measure.perCanonical)),
-        basis: measure.basis,
-        source: 'quantity',
-      };
-    }
+  // 2. A stored quantity that is already a measure: `BANANAS 0.670 Kg`.
+  if (measure && measure.basis !== 'item') {
+    return {
+      cents: round(item.priceCents / (qty * measure.perCanonical)),
+      basis: measure.basis,
+      source: 'quantity',
+    };
   }
 
-  // 3. The name — packaging text, and labelled as such.
   const size = parseSizeFromName(item.name, item.nameLocal);
+
+  /**
+   * 3. A measured size in the name, times how many were bought.
+   *
+   * This has to come before the count below, and getting that order wrong was
+   * a real bug: `G/VALLY MILK 2L 2 FOR $7.50` is stored as `qty: 2, unit:
+   * 'pc'`, so a count-first rule answered "$3.75 each" and never looked at the
+   * name — a true statement about bottles and a useless one about milk, which
+   * is only comparable per litre. Two bottles of 2 L is 4 L, so $1.875/L.
+   *
+   * `qty` and not `scan_units`, deliberately. §4.9: for this line they agree
+   * (both 2), but `CROISSANTS LARGE 3PK` is `qty: 3, scan_units: 1` — one
+   * thing scanned, three croissants eaten — and the question here is how much
+   * was bought, not how many times the till beeped.
+   */
+  if (size && size.basis !== 'item') {
+    return {
+      cents: round(item.priceCents / (size.magnitude * qty)),
+      basis: size.basis,
+      source: 'name',
+    };
+  }
+
+  /**
+   * 4. A count the quantity already carries.
+   *
+   * Only for `pc`, where §4.9 guarantees `qty` is the consumable count and a
+   * pack has already been expanded into it. A `pack` quantity counts packages,
+   * so the name still has to say what is inside one.
+   */
+  if (item.unit === 'pc' && qty > 1) {
+    return { cents: round(item.priceCents / qty), basis: 'item', source: 'quantity' };
+  }
+
+  // 5. A count only the name knows: "Croissants Large 3pk" as one pack.
   if (size) {
-    // `qty` multiplies the pack: two 200g packs are 400g of ham sausage.
-    const total = size.magnitude * (item.qty > 0 ? item.qty : 1);
-    if (total > 0) {
-      return { cents: round(item.priceCents / total), basis: size.basis, source: 'name' };
-    }
+    return {
+      cents: round(item.priceCents / (size.magnitude * qty)),
+      basis: 'item',
+      source: 'name',
+    };
   }
 
-  // 4. One of something, of unknown size. "Per item" is true, if uninformative.
-  if (item.qty > 0) {
-    return { cents: round(item.priceCents / item.qty), basis: 'item', source: 'quantity' };
-  }
-
-  return null;
+  // 6. One of something, of unknown size. "Each" is true, if uninformative.
+  return { cents: round(item.priceCents / qty), basis: 'item', source: 'quantity' };
 }
 
 const BASIS_LABELS: Record<UnitBasis, string> = {

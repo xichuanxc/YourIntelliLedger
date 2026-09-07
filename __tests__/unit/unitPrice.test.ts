@@ -77,6 +77,44 @@ describe('the three sources, in order of trust', () => {
     ).toEqual({ cents: 1247.5, basis: 'kilogram', source: 'name' });
   });
 
+  /**
+   * `G/VALLY MILK 2L 2 FOR $7.50` on the Fruit City receipt, stored as
+   * `qty: 2, unit: 'pc'`. A count-first rule answers "$3.75 each", which is a
+   * true statement about bottles and a useless one about milk — the only
+   * comparable figure is per litre, and two 2 L bottles are 4 L.
+   */
+  it('multiplies a multibuy of a measured product out to its real volume', () => {
+    expect(
+      unitPriceOf(item({ name: 'Green Valley 2 Ltr', qty: 2, unit: 'pc', priceCents: 750 }))
+    ).toEqual({ cents: 187.5, basis: 'litre', source: 'name' });
+  });
+
+  it('prefers litres over bottles even when the count would divide cleanly', () => {
+    // Four 1 L cartons for $6 is $1.50/L, not $1.50 each — which happens to
+    // agree here, and would not if the size were 1.5 L.
+    expect(
+      unitPriceOf(item({ name: 'Anchor Lite 1.5L', qty: 4, unit: 'pc', priceCents: 900 }))
+    ).toEqual({ cents: 150, basis: 'litre', source: 'name' });
+  });
+
+  /**
+   * §4.9: `CROISSANTS LARGE 3PK` is `qty: 3, scan_units: 1` — one thing
+   * scanned, three croissants eaten. The rate is about how much was bought,
+   * not how many times the till beeped, so a count in the name must not
+   * multiply a `pc` quantity that already expanded it.
+   */
+  it('does not double-count a pack the quantity already expanded', () => {
+    expect(
+      unitPriceOf(item({ name: 'Croissants Large 3pk', qty: 3, unit: 'pc', priceCents: 399 }))
+    ).toEqual({ cents: 133, basis: 'item', source: 'quantity' });
+  });
+
+  it('does multiply a count in the name when the quantity counts packages', () => {
+    expect(
+      unitPriceOf(item({ name: 'Croissants Large 3pk', qty: 2, unit: 'pack', priceCents: 798 }))
+    ).toEqual({ cents: 133, basis: 'item', source: 'name' });
+  });
+
   it('falls back to a price for the one thing, when nothing says how much', () => {
     expect(unitPriceOf(item({ name: 'Mystery Item', priceCents: 250 }))).toEqual({
       cents: 250,
@@ -98,6 +136,8 @@ describe('reading a size out of a name', () => {
     ['Pams Cheese Edam Slices 250g', 0.25, 'kilogram'],
     ['Kwongson Yangchun Noodles 500g', 0.5, 'kilogram'],
     ['Croissants Large 3pk', 3, 'item'],
+    ['Green Valley 2 Ltr', 2, 'litre'],
+    ['Meadow Fresh 1 Litre', 1, 'litre'],
     ['Grin Floss W/Smth 80PK', 80, 'item'],
     ["Whittaker's Mini Slab Almond Gold Share Pack 12 Pack", 12, 'item'],
   ])('reads %s', (name, magnitude, basis) => {
