@@ -15,6 +15,7 @@ import type { ChatTransport } from '@/agent/chatTransport';
 import type { DataCatalog } from '@/agent/catalog';
 import { MAX_ITERATIONS, runAgentTurn, type AgentDeps } from '@/agent/loop';
 import type { ChatReply, ChatRequest, ToolCall } from '@/agent/messages';
+import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
 import type { SqlDriver } from '@/data/driver';
 import { migrate } from '@/data/migrate';
 import { CATEGORIES } from '@/types/vocabulary';
@@ -212,7 +213,7 @@ describe('when the model gets it wrong', () => {
     expect(transport.requests.at(-1)?.tool_choice).toBe('none');
   });
 
-  it('shows an offline notice when the transport fails', async () => {
+  it('shows an offline notice when the network fails', async () => {
     const transport: ChatTransport = {
       name: 'broken',
       chat: async () => {
@@ -221,7 +222,39 @@ describe('when the model gets it wrong', () => {
     };
     const turn = await runAgentTurn('how much?', [], deps(transport));
     expect(turn.envelope.text).toContain('could not reach');
-    expect(turn.log.outcome).toBe('error');
+    expect(turn.log).toMatchObject({ outcome: 'error', errorCode: 'transport_error' });
+  });
+
+  /**
+   * These three were one message once, which made an unreachable network and a
+   * provider rejecting the request look identical to the user — and they are
+   * the two most likely faults, needing opposite fixes. The detail comes back
+   * on the turn rather than in `query_log`, which §15.3 keeps free of content.
+   */
+  it('says the provider refused, not that the network is down', async () => {
+    const transport: ChatTransport = {
+      name: 'rejecting',
+      chat: async () => {
+        throw new TransportRequestError('Invalid JSON payload: unknown name "anyOf"', 400);
+      },
+    };
+    const turn = await runAgentTurn('how much?', [], deps(transport));
+    expect(turn.envelope.text).not.toContain('could not reach');
+    expect(turn.envelope.text).toContain('refused');
+    expect(turn.log.errorCode).toBe('upstream_error');
+    expect(turn.errorDetail).toContain('anyOf');
+  });
+
+  it('names the fix when no key is configured', async () => {
+    const transport: ChatTransport = {
+      name: 'unconfigured',
+      chat: async () => {
+        throw new TransportUnavailableError('No API key is set. Add one in Settings.');
+      },
+    };
+    const turn = await runAgentTurn('how much?', [], deps(transport));
+    expect(turn.envelope.text).toContain('Settings');
+    expect(turn.log.errorCode).toBe('transport_unavailable');
   });
 
   it('still records the turn when it fails', async () => {

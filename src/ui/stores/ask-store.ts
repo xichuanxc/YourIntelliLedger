@@ -28,6 +28,7 @@ import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
 import { logQuery } from '@/data/telemetryRepo';
+import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 
 export interface AskMessage {
   id: string;
@@ -84,10 +85,19 @@ export const useAskStore = create<AskState>((set, get) => ({
       validation: { today: todayLocalDate(), firstBill: range.firstBill },
     });
 
+    // The provider's own words, in a development build only. Without them a
+    // rejected request says "the assistant service refused that request" and
+    // nothing about *why*, which costs a build-install-tap cycle per guess.
+    // Never in a release: an API error can quote the request back.
+    const answer =
+      DEV_TOOLS_ENABLED && turn.errorDetail
+        ? `${turn.envelope.text}\n\n[dev] ${turn.errorDetail}`
+        : turn.envelope.text;
+
     set((state) => ({
       messages: [
         ...state.messages,
-        { id: nextId(), role: 'assistant', text: turn.envelope.text, envelope: turn.envelope },
+        { id: nextId(), role: 'assistant', text: answer, envelope: turn.envelope },
       ],
       history: turn.history,
       thinking: false,

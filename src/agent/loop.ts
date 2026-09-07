@@ -37,7 +37,7 @@ import type { DataCatalog } from '@/agent/catalog';
 import { parseEnvelope, type AnswerEnvelope } from '@/agent/envelope';
 import { executeToolCall, type ExecutionStatus } from '@/agent/execute';
 import type { ChatMessage, ChatReply } from '@/agent/messages';
-import { TransportUnavailableError } from '@/agent/parseTransport';
+import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
 import { assembleRequest } from '@/agent/prompt';
 import type { ValidationContext } from '@/agent/validate';
 import type { SqlDriver } from '@/data/driver';
@@ -75,11 +75,24 @@ export interface AgentTurn {
   /** The conversation including this turn, for the next one. */
   history: ChatMessage[];
   log: QueryLogDraft;
+  /**
+   * What actually went wrong, for a developer.
+   *
+   * Returned rather than logged: §15.3 keeps `query_log` free of content, and
+   * a provider's error message can quote the request. The caller decides
+   * whether anyone sees it — the development build shows it, a release does
+   * not.
+   */
+  errorDetail?: string;
 }
 
 const OFFLINE_TEXT =
   'I could not reach the assistant just now. Your ledger is still here, and the ' +
   'Insights tab works offline.';
+
+const UPSTREAM_TEXT =
+  'The assistant service refused that request. This is a fault in the app rather ' +
+  'than in your ledger — everything else still works.';
 
 const GAVE_UP_TEXT =
   'I could not work that one out. Try asking it a different way, or with a ' +
@@ -103,12 +116,14 @@ export async function runAgentTurn(
   const finish = (
     envelope: AnswerEnvelope,
     outcome: QueryOutcome,
-    errorCode?: string
+    errorCode?: string,
+    errorDetail?: string
   ): AgentTurn => {
     working.push({ role: 'assistant', content: envelope.text });
     return {
       envelope,
       history: working,
+      errorDetail,
       log: {
         route: 'agent',
         outcome,
@@ -170,17 +185,26 @@ export async function runAgentTurn(
   } catch (error) {
     // §6.1 puts the fastpath check here — "network error → fastpath if the
     // pattern matches, else offline notice". The fastpaths are §6.6 and land
-    // in Week 8; until then every network failure takes the offline branch.
+    // in Week 8; until then a network failure takes the offline branch.
     //
-    // `TransportUnavailableError` is the exception, because it is not a
-    // network failure: it means the app is not configured — no key yet, or a
-    // rejected one — and its message names the fix. Replacing that with a
-    // generic "could not reach the assistant" would send the user looking for
-    // a signal problem they do not have.
-    return finish(
-      { text: error instanceof TransportUnavailableError ? error.message : OFFLINE_TEXT },
-      'error',
-      error instanceof Error ? error.name : 'transport_error'
-    );
+    // Three outcomes, not one. The first version of this said "could not
+    // reach the assistant" for everything, which made an unreachable network
+    // and a provider rejecting the request look identical — and they are the
+    // two most likely things to go wrong, needing opposite fixes.
+    const detail = error instanceof Error ? error.message : String(error);
+
+    // Not a network failure: the app is unconfigured — no key, or a rejected
+    // one — and the message names the fix.
+    if (error instanceof TransportUnavailableError) {
+      return finish({ text: error.message }, 'error', 'transport_unavailable', detail);
+    }
+
+    // The provider answered, and said no. Sending the user to check their
+    // signal would be a wild goose chase.
+    if (error instanceof TransportRequestError) {
+      return finish({ text: UPSTREAM_TEXT }, 'error', 'upstream_error', detail);
+    }
+
+    return finish({ text: OFFLINE_TEXT }, 'error', 'transport_error', detail);
   }
 }
