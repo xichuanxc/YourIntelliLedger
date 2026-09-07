@@ -349,12 +349,26 @@ function AddBillAction() {
       ? Spacing.five
       : insets.bottom + IOS_TAB_BAR_HEIGHT + Spacing.four;
 
+  // Scanning is what the button is for: it is the path §5.2 puts first, and
+  // the one that straightens the receipt before OCR. Landing on a menu first
+  // charged every capture a tap to choose the option that was already the
+  // right one. The other paths are still there, one long-press away.
+  const openChooser = () => router.push('/capture');
+
   return (
     <Pressable
-      // Capture is the primary way in now; manual entry is offered inside it.
-      onPress={() => router.push('/capture')}
+      onPress={() => router.push({ pathname: '/capture', params: { start: 'scan' } })}
+      onLongPress={openChooser}
       accessibilityRole="button"
-      accessibilityLabel="Add a bill"
+      accessibilityLabel="Scan a receipt"
+      accessibilityHint="Opens the scanner. Press and hold for the other ways to add a receipt."
+      // A long-press is awkward under a screen reader, so the same thing is
+      // offered as a named action TalkBack and VoiceOver can invoke directly
+      // (§7's accessibility requirement).
+      accessibilityActions={[{ name: 'longpress', label: 'Other ways to add a receipt' }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') openChooser();
+      }}
       style={({ pressed }) => [
         styles.fab,
         { bottom, backgroundColor: theme.primary, opacity: pressed ? 0.85 : 1 },
