@@ -35,7 +35,7 @@ import { createMMKV, type MMKV } from 'react-native-mmkv';
  * Stage A has no `hub-dev` / `hub` split (§13's base URLs) because there is one
  * Worker and no custom domain yet. When that changes, select on `__DEV__`.
  */
-const HUB_BASE_URL = 'https://yourintelliledger-hub.xcnz.workers.dev';
+export const HUB_BASE_URL = 'https://yourintelliledger-hub.xcnz.workers.dev';
 
 /** §13.5's aliases. `parse-strong` reads receipts; `chat-fast` is for §6. */
 export type ModelAlias = 'parse-strong' | 'chat-fast';

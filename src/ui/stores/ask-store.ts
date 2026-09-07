@@ -20,7 +20,7 @@ import { create } from 'zustand';
 
 import { catalogCache } from '@/agent/catalogCache';
 import { getDataCatalog } from '@/agent/catalog';
-import { createByokChatTransport } from '@/agent/byokChatTransport';
+import { createHubChatTransport } from '@/agent/hubChatTransport';
 import { runAgentTurn } from '@/agent/loop';
 import type { ChatMessage } from '@/agent/messages';
 import type { AnswerEnvelope } from '@/agent/envelope';
@@ -85,7 +85,10 @@ export const useAskStore = create<AskState>((set, get) => ({
     const catalog = await getDataCatalog(db, catalogCache);
 
     const turn = await runAgentTurn(question, get().history, {
-      transport: createByokChatTransport(),
+      // §13.2: the hub is the only LLM endpoint. `byokChatTransport` still
+      // works and is the developer's escape hatch, but nothing falls back to
+      // it automatically — see that file's header.
+      transport: createHubChatTransport(),
       db,
       catalog,
       validation: { today: todayLocalDate(), firstBill: range.firstBill },
