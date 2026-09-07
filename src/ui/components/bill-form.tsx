@@ -313,12 +313,19 @@ export function BillForm({ initial, submitLabel, onSubmit, onCancel }: BillFormP
               placeholder="Bananas"
               error={errors[`item-${item.key}-name`]}
             />
+            {/*
+              No placeholder. This field holds §4.7's `name_local` — the
+              non-English name a bilingual receipt prints beside the English
+              one — and it used to show a Chinese word as an example. An
+              example in one specific language reads as an instruction to use
+              that language, or as a hint that the field is only for it. The
+              label and hint say what it is for in words instead.
+            */}
             <TextField
-              label="Name as printed"
+              label="Name in another language"
               value={item.nameLocal}
               onChangeText={(value) => patchItem(item.key, { nameLocal: value })}
-              placeholder="豆腐干"
-              hint="Optional. Searched alongside the English name."
+              hint="Optional. Only if the receipt prints the name in another language as well. Searched alongside the English name."
             />
 
             <ChipSelect
