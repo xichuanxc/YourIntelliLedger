@@ -21,6 +21,7 @@ import { clearGeocodeCache } from '@/maps/geocodeCache';
 import type { BillSummary } from '@/types/ledger';
 import { EmptyState } from '@/ui/components/empty-state';
 import { ClearDataIcon, LoadSamplesIcon } from '@/ui/components/dev-icons';
+import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 import { GearIcon } from '@/ui/components/gear-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
@@ -167,9 +168,15 @@ function BillRow({ bill }: { bill: BillSummary }) {
 }
 
 /**
- * Development-only tools. `__DEV__` is false in release builds, so neither of
- * these ships. The user-facing import and delete-all are §15.1 and §15.2, in
- * Week 9, and they arrive together so there is always a backup first.
+ * Development-only tools. Absent from an ordinary build — `__DEV__` is false
+ * in release builds and `DEV_TOOLS_ENABLED` is then a literal `false` that
+ * Metro folds away, so these are not hidden but uncompiled. The user-facing
+ * import and delete-all are §15.1 and §15.2, in Week 9, and they arrive
+ * together so there is always a backup first.
+ *
+ * The iOS wrinkle is in `devTools.ts`: iOS has no standalone Debug build, so a
+ * Release build made with `EXPO_PUBLIC_DEV_TOOLS=1` is the only way to have
+ * these on a phone that is not tethered to Metro.
  *
  * Two buttons rather than one because they are genuinely two operations, and
  * each is now idempotent on its own terms: loading is additive, so it no
@@ -178,7 +185,7 @@ function BillRow({ bill }: { bill: BillSummary }) {
  * twice — clear first if you want exactly eleven.
  */
 function DevTools() {
-  if (!__DEV__) return null;
+  if (!DEV_TOOLS_ENABLED) return null;
 
   return (
     <>

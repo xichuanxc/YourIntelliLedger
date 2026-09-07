@@ -130,6 +130,49 @@ On a **free** Apple account:
 `xcodebuild` through `grep`/`head` returns *grep's* exit status and truncates
 the real message; that hid the actual signing error for two cycles here.
 
+**`npm run ios` cannot sign this project from cold.** It has no way to pass
+`-allowProvisioningUpdates` to `xcodebuild`, so when no provisioning profile
+exists yet for `nz.yourintelliledger.app` — a fresh machine, or seven days
+after the last build — it fails with *"Automatic signing is disabled and
+unable to generate a profile"* even though `CODE_SIGN_STYLE` is `Automatic`.
+Xcode is allowed to *use* a profile unattended but not to *create* one. Drive
+`xcodebuild` directly once and the cached profile makes `npm run ios` work
+again until it lapses:
+
+```sh
+cd ios
+xcodebuild -workspace YourIntelliLedger.xcworkspace -scheme YourIntelliLedger \
+  -configuration Release -destination "id=<device udid>" \
+  -derivedDataPath build -allowProvisioningUpdates build
+xcrun devicectl device install app --device <device id> \
+  build/Build/Products/Release-iphoneos/YourIntelliLedger.app
+```
+
+**`.xcode.env.local` must name the Homebrew symlink, not a Cellar path.** It is
+gitignored and machine-local, and it exists because Xcode's script phases do
+not inherit a login shell `PATH`, so `.xcode.env`'s `$(command -v node)` finds
+nothing. Written as `/opt/homebrew/Cellar/node/<version>/bin/node` it stops
+working the next time `brew upgrade` runs, and the failure surfaces as a
+*Hermes* script phase dying with `No such file or directory` — days after the
+upgrade that caused it, and nowhere near node. Use `/opt/homebrew/bin/node`.
+
+**The development tools need a flag on iOS.** The two ledger-header buttons
+(load sample receipts, clear all data) and the parse-timing readout on the
+review screen are shared code gated on `__DEV__`, which is true on Android
+because `npm run android` builds Debug. iOS has no standalone Debug build, so
+they never appear on a phone. Build Release with
+
+```sh
+DEV_TOOLS=1 xcodebuild … -configuration Release …
+```
+
+which `app.config.ts` turns into `extra.devTools`, read by
+`src/ui/devTools.ts`. An `EXPO_PUBLIC_` name does **not** work for this: those
+are inlined from `.env` files, and a value exported in the shell that runs
+`xcodebuild` never reaches the bundle — verified by exporting with and without
+it and getting byte-identical output. `app.config.ts` is evaluated by a build
+phase that does inherit the environment, which is why the flag lives there.
+
 ## Android Studio
 
 **Both build paths work.** `npm run android` builds, installs, creates the

@@ -90,6 +90,25 @@ const config: ExpoConfig = {
     typedRoutes: true,
     reactCompiler: true,
   },
+  extra: {
+    /**
+     * Whether the on-device development tools are compiled in — see
+     * `src/ui/devTools.ts` for why iOS needs a door other than `__DEV__`.
+     *
+     * Read here rather than through an `EXPO_PUBLIC_` name in the app: those
+     * are inlined by Metro from `.env` files, and a value exported in the
+     * shell that runs `xcodebuild` does not reach them (verified — the bundle
+     * came out byte-identical with and without it). This file, by contrast, is
+     * evaluated by the "Generate app.config" build phase, which inherits the
+     * environment of the build.
+     *
+     *     DEV_TOOLS=1 xcodebuild … -configuration Release …
+     *
+     * Absent from any build made without it, so the buttons that delete data
+     * cannot be reached in an ordinary release.
+     */
+    devTools: process.env.DEV_TOOLS === '1',
+  },
 };
 
 export default config;

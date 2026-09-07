@@ -35,6 +35,7 @@ import { FlagBanner } from '@/ui/components/flag-banner';
 import { Screen } from '@/ui/components/screen';
 import { TextField } from '@/ui/components/text-field';
 import { ThemedText } from '@/ui/components/themed-text';
+import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { useCaptureStore } from '@/ui/stores/capture-store';
 import { useLedgerStore } from '@/ui/stores/ledger-store';
@@ -259,7 +260,10 @@ export default function ReviewScreen() {
           />
         </View>
 
-        {__DEV__ && (
+        {/* The same gate as the ledger's dev buttons: this readout is how
+            §5.7's latency budget gets measured on real hardware, so it has to
+            survive into the one iOS build that runs off the laptop. */}
+        {DEV_TOOLS_ENABLED && (
           <ThemedText type="small" themeColor="textSecondary">
             {`${(parse.durationMs / 1000).toFixed(1)}s · ${parse.usage?.promptTokens ?? '?'} in / ${parse.usage?.completionTokens ?? '?'} out / ${parse.usage?.thoughtTokens ?? 0} thinking · ${parse.modelAlias}${parse.retried ? ' · RETRIED' : ''}`}
           </ThemedText>
