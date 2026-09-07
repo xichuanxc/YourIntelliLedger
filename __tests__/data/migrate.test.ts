@@ -31,7 +31,14 @@ describe('migrate (spec §4.12)', () => {
   it('brings an empty database up to the current schema version', async () => {
     const report = await migrate(db);
 
-    expect(report).toEqual({ from: 0, to: SCHEMA_VERSION, applied: [1] });
+    // Derived from the registry, not written out: a literal here has to be
+    // edited by every future migration, which makes an unrelated schema change
+    // look like a broken test.
+    expect(report).toEqual({
+      from: 0,
+      to: SCHEMA_VERSION,
+      applied: MIGRATIONS.map((migration) => migration.version),
+    });
     expect(await userVersion(db)).toBe(SCHEMA_VERSION);
     expect(await tableNames(db)).toEqual(['bill_items', 'bills', 'query_log', 'receipt_scans']);
   });
@@ -45,22 +52,26 @@ describe('migrate (spec §4.12)', () => {
   });
 
   it('applies only the migrations a partially-migrated database is missing', async () => {
-    const second: Migration = {
-      version: 2,
+    const next: Migration = {
+      version: SCHEMA_VERSION + 1,
       name: 'test-only follow-up',
       sql: 'CREATE TABLE later (id INTEGER PRIMARY KEY)',
     };
 
     await migrate(db, MIGRATIONS);
-    const report = await migrate(db, [...MIGRATIONS, second]);
+    const report = await migrate(db, [...MIGRATIONS, next]);
 
-    expect(report).toEqual({ from: 1, to: 2, applied: [2] });
+    expect(report).toEqual({
+      from: SCHEMA_VERSION,
+      to: next.version,
+      applied: [next.version],
+    });
     expect(await tableNames(db)).toContain('later');
   });
 
   it('rolls back a failing migration and leaves the version where it was', async () => {
     const broken: Migration = {
-      version: 2,
+      version: SCHEMA_VERSION + 1,
       name: 'test-only broken migration',
       sql: `CREATE TABLE half_applied (id INTEGER PRIMARY KEY);
             CREATE TABLE bills (nope INTEGER);`, // bills already exists
@@ -70,7 +81,7 @@ describe('migrate (spec §4.12)', () => {
     await expectRejection(() => migrate(db, [...MIGRATIONS, broken]));
 
     // The point of the per-migration transaction: no half-applied state.
-    expect(await userVersion(db)).toBe(1);
+    expect(await userVersion(db)).toBe(SCHEMA_VERSION);
     expect(await tableNames(db)).not.toContain('half_applied');
   });
 
@@ -82,7 +93,8 @@ describe('migrate (spec §4.12)', () => {
   });
 
   it('rejects a migration list with a gap or duplicate', async () => {
-    const gap: Migration = { version: 3, name: 'gap', sql: 'SELECT 1' };
+    // Two past the end, so it stays a gap however many migrations ship.
+    const gap: Migration = { version: SCHEMA_VERSION + 2, name: 'gap', sql: 'SELECT 1' };
     await expectRejection(() => migrate(db, [...MIGRATIONS, gap]), { message: /contiguous/ });
   });
 

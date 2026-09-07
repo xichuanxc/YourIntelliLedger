@@ -3,6 +3,7 @@ import { openTestDriver } from '../support/sqlite-driver';
 
 import type { SqlDriver } from '@/data/driver';
 import { NotFoundError, ValidationError } from '@/data/errors';
+import { needsReview, unreviewedFlags } from '@/data/review';
 import {
   addBillItem,
   countBills,
@@ -15,7 +16,7 @@ import {
   listLedger,
   updateBill,
   updateBillItem,
-  confirmLowConfidenceItems,
+  markBillReviewed,
   findDuplicateBill,
 } from '@/data/ledgerRepo';
 import { migrate } from '@/data/migrate';
@@ -435,8 +436,8 @@ describe('listing and search', () => {
  * records how sure the model was, and a person vouching for a line supersedes
  * that. The numeric flags are claims about the numbers and must survive.
  */
-describe('confirmLowConfidenceItems', () => {
-  /** Local factory: this file's shared fixture has no low-confidence lines. */
+describe('markBillReviewed', () => {
+  /** Local factory: this file's shared fixture has no flagged lines. */
   const bill = (overrides: Partial<NewBillInput>): NewBillInput => ({
     merchant: 'New World',
     purchasedAt: '2026-07-19',
@@ -445,52 +446,33 @@ describe('confirmLowConfidenceItems', () => {
     ...overrides,
   });
 
-  it('clears low_confidence once every line has been vouched for', async () => {
+  const flagged = (billId: number) => getBill(db, billId).then((b) => b!);
+
+  /**
+   * The gap this replaced `confirmLowConfidenceItems` to close. Three of the
+   * four flags clear only when the numbers change, and a receipt whose figures
+   * genuinely do not reconcile showed "needs review" for ever with no way to
+   * dismiss it.
+   */
+  it('lets a sum that will never add up be accepted', async () => {
     const billId = await createBill(
       db,
       bill({
-        totalCents: 1000,
-        items: [
-          { name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' },
-          { name: 'Clear', category: 'dairy', priceCents: 600, confidence: 'high' },
-        ],
+        totalCents: 9999,
+        items: [{ name: 'Clear', category: 'dairy', priceCents: 400, confidence: 'high' }],
       })
     );
 
-    expect((await getBill(db, billId))!.parseFlags).toContain('low_confidence');
-
-    const confirmed = await confirmLowConfidenceItems(db, billId);
-
-    expect(confirmed).toBe(1);
-    expect((await getBill(db, billId))!.parseFlags).not.toContain('low_confidence');
-  });
-
-  /** No amount, name or category may move — only who last stood behind them. */
-  it('changes no values, only the confidence', async () => {
-    const billId = await createBill(
-      db,
-      bill({
-        totalCents: 400,
-        items: [{ name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' }],
-      })
-    );
-
-    const before = (await getBill(db, billId))!;
-    await confirmLowConfidenceItems(db, billId);
-    const after = (await getBill(db, billId))!;
-
-    expect(after.totalCents).toBe(before.totalCents);
-    expect(after.items[0].name).toBe('Smudged');
-    expect(after.items[0].priceCents).toBe(400);
-    expect(after.items[0].category).toBe('dairy');
+    expect(needsReview(await flagged(billId))).toBe(true);
+    await markBillReviewed(db, billId);
+    expect(needsReview(await flagged(billId))).toBe(false);
   });
 
   /**
-   * The important one. A sum that does not add up is a fact about the numbers,
-   * not an opinion about legibility — dismissing it would destroy the evidence
-   * §4.11 exists to keep.
+   * §4.11: the flags are evidence that the parse was unreliable. Accepting
+   * them records who looked, and changes nothing about what was read.
    */
-  it('leaves sum_mismatch alone', async () => {
+  it('keeps the flags and every number exactly as they were', async () => {
     const billId = await createBill(
       db,
       bill({
@@ -499,30 +481,64 @@ describe('confirmLowConfidenceItems', () => {
       })
     );
 
-    await confirmLowConfidenceItems(db, billId);
-    const flags = (await getBill(db, billId))!.parseFlags;
+    const before = await flagged(billId);
+    await markBillReviewed(db, billId);
+    const after = await flagged(billId);
 
-    expect(flags).toContain('sum_mismatch');
-    expect(flags).not.toContain('low_confidence');
+    expect(after.parseFlags).toEqual(before.parseFlags);
+    expect(after.totalCents).toBe(before.totalCents);
+    expect(after.items[0].priceCents).toBe(400);
+    // The old implementation rewrote this to 'high', which made the record
+    // claim the *model* had been confident when only a person was.
+    expect(after.items[0].confidence).toBe('low');
+    expect(after.reviewedAt).not.toBeNull();
   });
 
-  it('leaves missing_price alone', async () => {
+  it('records which flags were accepted, not merely that something was', async () => {
     const billId = await createBill(
       db,
       bill({
-        totalCents: 400,
-        items: [{ name: 'Illegible', category: 'dairy', priceCents: null, confidence: 'low' }],
+        totalCents: 9999,
+        items: [{ name: 'Smudged', category: 'dairy', priceCents: 400, confidence: 'low' }],
       })
     );
 
-    await confirmLowConfidenceItems(db, billId);
-    const flags = (await getBill(db, billId))!.parseFlags;
-
-    expect(flags).toContain('missing_price');
-    expect(flags).not.toContain('low_confidence');
+    const accepted = await markBillReviewed(db, billId);
+    expect(accepted.sort()).toEqual(['low_confidence', 'sum_mismatch']);
+    expect((await flagged(billId)).reviewedFlags?.sort()).toEqual([
+      'low_confidence',
+      'sum_mismatch',
+    ]);
   });
 
-  it('is a no-op on a bill with nothing to confirm', async () => {
+  /**
+   * Acknowledging one problem must not silence a different one raised later,
+   * or "I have checked this" becomes "never tell me anything again".
+   */
+  it('speaks up again when a later edit raises a new flag', async () => {
+    const billId = await createBill(
+      db,
+      bill({
+        totalCents: 9999,
+        items: [{ name: 'Clear', category: 'dairy', priceCents: 400, confidence: 'high' }],
+      })
+    );
+
+    await markBillReviewed(db, billId);
+    expect(needsReview(await flagged(billId))).toBe(false);
+
+    // Now make a price illegible, which raises `missing_price`.
+    const itemId = (await flagged(billId)).items[0].id;
+    await updateBillItem(db, itemId, { priceCents: null });
+
+    const after = await flagged(billId);
+    expect(after.parseFlags).toContain('missing_price');
+    expect(needsReview(after)).toBe(true);
+    // The one already accepted stays quiet.
+    expect(unreviewedFlags(after)).toEqual(['missing_price']);
+  });
+
+  it('leaves an unflagged bill alone', async () => {
     const billId = await createBill(
       db,
       bill({
@@ -531,23 +547,27 @@ describe('confirmLowConfidenceItems', () => {
       })
     );
 
-    expect(await confirmLowConfidenceItems(db, billId)).toBe(0);
-    expect((await getBill(db, billId))!.parseFlags).toEqual([]);
+    expect(await markBillReviewed(db, billId)).toEqual([]);
+    expect(needsReview(await flagged(billId))).toBe(false);
   });
 
   it('touches only the bill it was given', async () => {
     const target = await createBill(
       db,
-      bill({ totalCents: 400, items: [{ name: 'A', category: 'dairy', priceCents: 400, confidence: 'low' }] })
+      bill({ totalCents: 9999, items: [{ name: 'A', category: 'dairy', priceCents: 400 }] })
     );
     const other = await createBill(
       db,
-      bill({ totalCents: 400, items: [{ name: 'B', category: 'dairy', priceCents: 400, confidence: 'low' }] })
+      bill({ totalCents: 9999, items: [{ name: 'B', category: 'dairy', priceCents: 400 }] })
     );
 
-    await confirmLowConfidenceItems(db, target);
+    await markBillReviewed(db, target);
 
-    expect((await getBill(db, other))!.parseFlags).toContain('low_confidence');
+    expect(needsReview(await flagged(other))).toBe(true);
+  });
+
+  it('refuses a bill that does not exist', async () => {
+    await expectRejection(() => markBillReviewed(db, 9999), { type: NotFoundError });
   });
 });
 

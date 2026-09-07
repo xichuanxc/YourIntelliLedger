@@ -43,7 +43,8 @@ export interface ListOptions {
 
 const BILL_COLUMNS = `id, merchant, merchant_norm, merchant_address, purchased_at,
   purchased_time, total_cents, discount_cents, currency, units_sold, source,
-  capture_path, page_count, model_alias, created_at, updated_at, parse_flags`;
+  capture_path, page_count, model_alias, created_at, updated_at, parse_flags,
+  reviewed_at, reviewed_flags`;
 
 /**
  * The statements below are split around their one variable piece rather than
@@ -53,7 +54,7 @@ const BILL_COLUMNS = `id, merchant, merchant_norm, merchant_address, purchased_a
  * rule.
  */
 const LIST_BILLS_HEAD = `SELECT b.id, b.merchant, b.purchased_at, b.purchased_time, b.total_cents,
-            b.currency, b.source, b.parse_flags,
+            b.currency, b.source, b.parse_flags, b.reviewed_flags,
             (SELECT COUNT(*) FROM bill_items i WHERE i.bill_id = b.id) AS item_count
        FROM bills b
        `;
@@ -93,6 +94,7 @@ type BillSummaryRow = Pick<
   | 'currency'
   | 'source'
   | 'parse_flags'
+  | 'reviewed_flags'
 > & { item_count: number };
 
 /**
@@ -121,6 +123,7 @@ export async function listBills(db: SqlDriver, options: ListOptions = {}): Promi
     source: row.source,
     itemCount: row.item_count,
     parseFlags: parseFlagsFromJson(row.parse_flags),
+    reviewedFlags: row.reviewed_flags === null ? null : parseFlagsFromJson(row.reviewed_flags),
   }));
 }
 
@@ -641,14 +644,32 @@ export async function deleteAllBills(db: SqlDriver): Promise<number> {
  *
  * Returns how many lines were confirmed; 0 when there was nothing to do.
  */
-export async function confirmLowConfidenceItems(db: SqlDriver, billId: number): Promise<number> {
+/**
+ * Records that a person has looked at this bill's flags and accepted them.
+ *
+ * Replaces an earlier `confirmLowConfidenceItems`, which rewrote every low
+ * confidence to `high`. That cleared the banner by making the record say the
+ * *model* had been confident, which it had not — destroying the evidence
+ * §4.11 exists to keep, and only ever working for one of the four flags.
+ *
+ * Nothing here touches a number or a confidence. The flags stay exactly as
+ * computed; what is stored is which of them a human has seen.
+ */
+export async function markBillReviewed(db: SqlDriver, billId: number): Promise<ParseFlag[]> {
   return db.transaction(async (tx) => {
-    const result = await tx.run(
-      "UPDATE bill_items SET confidence = 'high' WHERE bill_id = ? AND confidence = 'low'",
+    const row = await tx.get<{ parse_flags: string | null }>(
+      'SELECT parse_flags FROM bills WHERE id = ?',
       [billId]
     );
-    await recomputeParseFlags(tx, billId);
-    return result.changes;
+    if (!row) throw new NotFoundError('Bill', billId);
+
+    const flags = parseFlagsFromJson(row.parse_flags);
+    await tx.run('UPDATE bills SET reviewed_at = ?, reviewed_flags = ? WHERE id = ?', [
+      nowUtc(),
+      JSON.stringify(flags),
+      billId,
+    ]);
+    return flags;
   });
 }
 

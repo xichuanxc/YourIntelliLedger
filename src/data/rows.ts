@@ -27,6 +27,8 @@ export interface BillRow {
   created_at: string;
   updated_at: string;
   parse_flags: string | null;
+  reviewed_at: string | null;
+  reviewed_flags: string | null;
 }
 
 export interface BillItemRow {
@@ -84,6 +86,11 @@ export function toBill(row: BillRow): Bill {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     parseFlags: parseFlagsFromJson(row.parse_flags),
+    reviewedAt: row.reviewed_at,
+    // NULL means nobody has acknowledged anything, which is different from
+    // having acknowledged an empty set — `needsReview` treats them the same,
+    // but an export (§15.1) should not claim a review that never happened.
+    reviewedFlags: row.reviewed_flags === null ? null : parseFlagsFromJson(row.reviewed_flags),
   };
 }
 

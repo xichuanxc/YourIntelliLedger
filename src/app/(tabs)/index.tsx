@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { seedCorpus } from '@/data/corpus';
+import { needsReview } from '@/data/review';
 import { formatDate, formatMonth } from '@/data/dates';
 import { getDb } from '@/data/db';
 import { deleteAllBills } from '@/data/ledgerRepo';
@@ -165,7 +166,7 @@ function BillRow({ bill }: { bill: BillSummary }) {
       </View>
       <View style={styles.rowTrailing}>
         <ThemedText type="amount">{formatMoney(bill.totalCents, bill.currency)}</ThemedText>
-        {bill.parseFlags.length > 0 && (
+        {needsReview(bill) && (
           <ThemedText type="small" themeColor="warning" accessibilityLabel="Needs review">
             Needs review
           </ThemedText>

@@ -73,6 +73,10 @@ export interface Bill {
   updatedAt: UtcTimestamp;
   /** Integrity-check results; never silently corrected (§4.11). */
   parseFlags: ParseFlag[];
+  /** When a person confirmed they had looked at the flags, or null. */
+  reviewedAt: UtcTimestamp | null;
+  /** Which flags that confirmation covered — see `data/review.ts`. */
+  reviewedFlags: ParseFlag[] | null;
 }
 
 /** A bill with its line items. An itemless bill has `items: []` (§5.1). */
@@ -169,6 +173,8 @@ export interface BillSummary {
   source: Source;
   itemCount: number;
   parseFlags: ParseFlag[];
+  /** Which flags a person has accepted — see `data/review.ts`. */
+  reviewedFlags: ParseFlag[] | null;
 }
 
 /** A calendar month of bills with its header total (§7 ledger screen). */

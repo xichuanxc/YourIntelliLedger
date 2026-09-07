@@ -13,7 +13,7 @@ import {
 
 import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
-import { confirmLowConfidenceItems, deleteBill, getBill } from '@/data/ledgerRepo';
+import { deleteBill, getBill, markBillReviewed } from '@/data/ledgerRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
 import { getMapPreviews } from '@/data/prefs';
 import type { BillItem, BillWithItems } from '@/types/ledger';
@@ -113,11 +113,12 @@ export default function BillDetailScreen() {
 
         <FlagBanner
           flags={bill.parseFlags}
+          reviewedFlags={bill.reviewedFlags}
           onConfirmReviewed={async () => {
             const db = await getDb();
-            await confirmLowConfidenceItems(db, billId);
+            await markBillReviewed(db, billId);
             setBill(await getBill(db, billId));
-            // The ledger row draws "Needs review" from the same flags, so it
+            // The ledger row draws "Needs review" from the same fields, so it
             // has to be told too or the list disagrees with the bill.
             await refresh();
           }}
