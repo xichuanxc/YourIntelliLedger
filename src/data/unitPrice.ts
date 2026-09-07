@@ -177,8 +177,26 @@ export function unitPriceOf(item: UnitPriceInput): UnitPrice | null {
   if (item.priceCents == null || item.priceCents < 0) return null;
   const qty = item.qty > 0 ? item.qty : 1;
 
+  /**
+   * A measured unit that was scanned more than once is a contradiction.
+   *
+   * §4.9: "a weighed item is always one scan unit regardless of weight." So
+   * `unit: 'l'` with `scan_units: 2` cannot be a line the till measured — it
+   * is a multibuy whose two numbers went to the wrong fields, the count of
+   * bottles landing in `qty` and the size of one bottle landing in `unit`.
+   * `G/VALLY MILK 2L 2 FOR $7.50` parsed that way says two litres where four
+   * were carried home.
+   *
+   * Neither field can be trusted then, so the row's own quantity is skipped
+   * and the name is asked instead. The parsing prompt is where this is
+   * actually fixed; this only keeps a row that was already stored wrong from
+   * producing a confidently wrong rate.
+   */
+  const measuredButScannedTwice =
+    measure && measure.basis !== 'item' && (item.scanUnits ?? 1) > 1;
+
   // 2. A stored quantity that is already a measure: `BANANAS 0.670 Kg`.
-  if (measure && measure.basis !== 'item') {
+  if (measure && measure.basis !== 'item' && !measuredButScannedTwice) {
     return {
       cents: round(item.priceCents / (qty * measure.perCanonical)),
       basis: measure.basis,

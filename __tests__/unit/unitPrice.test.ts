@@ -124,6 +124,34 @@ describe('the three sources, in order of trust', () => {
     ).toEqual({ cents: 1247.5, basis: 'kilogram', source: 'name' });
   });
 
+  /**
+   * The row as the parser actually stored it on the phone: `qty: 2, unit: 'l',
+   * scan_units: 2`. §4.9 says a weighed line is always one scan unit, so this
+   * combination cannot be real — the bottle count went into `qty` and the
+   * bottle size into `unit`. Trusting it gives $7.50 ÷ 2 = $3.75 per litre for
+   * milk that was four litres.
+   */
+  it('distrusts a measured unit that was scanned more than once', () => {
+    expect(
+      unitPriceOf(
+        item({ name: 'G/VALLY MILK 2L', qty: 2, unit: 'l', scanUnits: 2, priceCents: 750 })
+      )
+    ).toEqual({ cents: 187.5, basis: 'litre', source: 'name' });
+  });
+
+  it('still trusts a measured unit scanned once', () => {
+    expect(
+      unitPriceOf(item({ name: 'Loose Milk', qty: 2, unit: 'l', scanUnits: 1, priceCents: 750 }))
+    ).toEqual({ cents: 375, basis: 'litre', source: 'quantity' });
+  });
+
+  it('has nothing better to offer when the name carries no size either', () => {
+    // Honest rather than clever: "$3.75 each" for two of something.
+    expect(
+      unitPriceOf(item({ name: 'Milk', qty: 2, unit: 'l', scanUnits: 2, priceCents: 750 }))
+    ).toEqual({ cents: 375, basis: 'item', source: 'quantity' });
+  });
+
   it('does not double-count a pack the quantity already expanded', () => {
     expect(
       unitPriceOf(item({ name: 'Croissants Large 3pk', qty: 3, unit: 'pc', priceCents: 399 }))
