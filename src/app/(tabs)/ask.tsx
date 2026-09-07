@@ -1,29 +1,245 @@
-import { StyleSheet, View } from 'react-native';
+/**
+ * Ask — §6's agent, in the thin form Week 7 calls for.
+ *
+ * A message list, a box, and a typing indicator. Deliberately **not** here:
+ * charts, tables, followup chips and confirmation cards, which are §11's Week
+ * 8 ("envelope rendering, fastpaths, followups, confirmation cards"). The
+ * screen exists now because Week 7's own acceptance criterion — streaming
+ * verified on physical hardware (§6.2) — cannot be checked with no UI at all,
+ * and because a loop that nothing can reach is a loop nobody has watched work.
+ *
+ * The answer's structured half is kept on each message even though nothing
+ * draws it yet, so Week 8 renders what has already been received rather than
+ * asking the model again.
+ *
+ * Answers are not streamed. §6.2: "correctness must never depend on
+ * streaming", so the non-streaming path is the one that is built first and the
+ * indicator below is the fallback that §6.2 prescribes if streaming proves
+ * unstable — it is what Week 7 ships, not a placeholder for it.
+ */
+
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
-import { Spacing } from '@/ui/theme';
+import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
+import { useTheme } from '@/ui/hooks/use-theme';
+import { useAskStore, type AskMessage } from '@/ui/stores/ask-store';
+import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 
 /**
- * Placeholder for the agent chat (§6, Weeks 7–8). It exists now so the tab
- * bar is the shape the spec describes and so the route is stable before the
- * loop, hub client and envelope renderer land behind it.
+ * Whether the keyboard is covering the bottom of the screen.
+ *
+ * Needed because two things want that space and only one of them is there at a
+ * time: iOS's translucent tab bar, and the keyboard that covers it. Padding
+ * for both at once leaves the composer floating a tab bar's height above the
+ * keyboard.
  */
+function useKeyboardShown(): boolean {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    // `will` events on iOS so the padding changes with the animation rather
+    // than after it; Android only emits `did`.
+    const show = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const shownSub = Keyboard.addListener(show, () => setShown(true));
+    const hiddenSub = Keyboard.addListener(hide, () => setShown(false));
+    return () => {
+      shownSub.remove();
+      hiddenSub.remove();
+    };
+  }, []);
+
+  return shown;
+}
+
 export default function AskScreen() {
+  const theme = useTheme();
+  const tabBarInset = useTabBarInset();
+  const keyboardShown = useKeyboardShown();
+  const { messages, thinking, send } = useAskStore();
+  const [draft, setDraft] = useState('');
+  const list = useRef<FlatList<AskMessage>>(null);
+
+  // A new answer is at the bottom, and an answer nobody scrolls to is an
+  // answer nobody read.
+  useEffect(() => {
+    if (messages.length > 0) list.current?.scrollToEnd({ animated: true });
+  }, [messages.length, thinking]);
+
+  const submit = () => {
+    const text = draft.trim();
+    if (text === '' || thinking) return;
+    setDraft('');
+    void send(text);
+  };
+
+  const canSend = draft.trim() !== '' && !thinking;
+
   return (
     <Screen>
       <View style={styles.header}>
         <ThemedText type="title">Ask</ThemedText>
       </View>
-      <EmptyState
-        title="Not built yet"
-        message="Asking questions about your spending arrives with the agent, in a later build. Your bills are already being recorded — nothing here is needed to keep using the ledger."
-      />
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {messages.length === 0 ? (
+          <View style={styles.flex}>
+            <EmptyState
+              title="Ask about your spending"
+              message={
+                'Try “how much did I spend on groceries last month?” or “which shop do I ' +
+                'go to most?”. Answers come from the bills on this phone.'
+              }
+            />
+          </View>
+        ) : (
+          <FlatList
+            ref={list}
+            data={messages}
+            keyExtractor={(message) => message.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => <Bubble message={item} />}
+            // The list holds the answers, so it should not eat a tap meant for
+            // the keyboard's dismissal.
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+          />
+        )}
+
+        {thinking && (
+          <View style={styles.thinking} accessibilityRole="progressbar" accessibilityLabel="Thinking">
+            <ActivityIndicator size="small" />
+            <ThemedText type="small" themeColor="textSecondary">
+              Reading your ledger…
+            </ThemedText>
+          </View>
+        )}
+
+        <View
+          style={[
+            styles.composer,
+            {
+              borderTopColor: theme.border,
+              backgroundColor: theme.background,
+              // The tab bar is only under the composer when the keyboard is
+              // not covering it.
+              paddingBottom: (keyboardShown ? 0 : tabBarInset) + Spacing.three,
+            },
+          ]}>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={submit}
+            placeholder="Ask a question"
+            placeholderTextColor={theme.textSecondary}
+            accessibilityLabel="Your question"
+            returnKeyType="send"
+            multiline
+            editable={!thinking}
+            style={[
+              styles.input,
+              { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border },
+            ]}
+          />
+          <Pressable
+            onPress={submit}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !canSend }}
+            style={({ pressed }) => [
+              styles.send,
+              {
+                backgroundColor: canSend ? theme.primary : theme.backgroundElement,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}>
+            <ThemedText
+              type="smallBold"
+              style={{ color: canSend ? theme.textInverse : theme.textSecondary }}>
+              Send
+            </ThemedText>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
+function Bubble({ message }: { message: AskMessage }) {
+  const theme = useTheme();
+  const mine = message.role === 'user';
+
+  return (
+    <View
+      style={[
+        styles.bubble,
+        {
+          alignSelf: mine ? 'flex-end' : 'flex-start',
+          backgroundColor: mine ? theme.primary : theme.backgroundElement,
+        },
+      ]}>
+      <ThemedText style={mine ? { color: theme.textInverse } : undefined}>{message.text}</ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  header: { padding: Spacing.four },
+  flex: { flex: 1 },
+  header: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
+  listContent: { padding: Spacing.four, gap: Spacing.three },
+  bubble: {
+    maxWidth: '85%',
+    borderRadius: Radius.large,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  thinking: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.two,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  input: {
+    flex: 1,
+    minHeight: MinTouchTarget,
+    maxHeight: 120,
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    fontSize: 16,
+  },
+  send: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.medium,
+  },
 });

@@ -37,6 +37,7 @@ import type { DataCatalog } from '@/agent/catalog';
 import { parseEnvelope, type AnswerEnvelope } from '@/agent/envelope';
 import { executeToolCall, type ExecutionStatus } from '@/agent/execute';
 import type { ChatMessage, ChatReply } from '@/agent/messages';
+import { TransportUnavailableError } from '@/agent/parseTransport';
 import { assembleRequest } from '@/agent/prompt';
 import type { ValidationContext } from '@/agent/validate';
 import type { SqlDriver } from '@/data/driver';
@@ -170,8 +171,14 @@ export async function runAgentTurn(
     // §6.1 puts the fastpath check here — "network error → fastpath if the
     // pattern matches, else offline notice". The fastpaths are §6.6 and land
     // in Week 8; until then every network failure takes the offline branch.
+    //
+    // `TransportUnavailableError` is the exception, because it is not a
+    // network failure: it means the app is not configured — no key yet, or a
+    // rejected one — and its message names the fix. Replacing that with a
+    // generic "could not reach the assistant" would send the user looking for
+    // a signal problem they do not have.
     return finish(
-      { text: OFFLINE_TEXT },
+      { text: error instanceof TransportUnavailableError ? error.message : OFFLINE_TEXT },
       'error',
       error instanceof Error ? error.name : 'transport_error'
     );
