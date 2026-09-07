@@ -35,7 +35,7 @@
 import type { ChatTransport } from '@/agent/chatTransport';
 import type { DataCatalog } from '@/agent/catalog';
 import { parseEnvelope, type AnswerEnvelope } from '@/agent/envelope';
-import { executeToolCall, type ExecutionStatus } from '@/agent/execute';
+import { executeToolCall, type BillReference, type ExecutionStatus } from '@/agent/execute';
 import type { ChatMessage, ChatReply } from '@/agent/messages';
 import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
 import { assembleRequest } from '@/agent/prompt';
@@ -76,6 +76,11 @@ export interface AgentTurn {
   history: ChatMessage[];
   log: QueryLogDraft;
   /**
+   * Names the tools vouched for, so the answer can link to the bills behind
+   * it. Gathered from rows rather than from the model — see `execute.ts`.
+   */
+  references: BillReference[];
+  /**
    * What actually went wrong, for a developer.
    *
    * Returned rather than logged: §15.3 keeps `query_log` free of content, and
@@ -108,6 +113,7 @@ export async function runAgentTurn(
 
   const working: ChatMessage[] = [...history, { role: 'user', content: userMessage }];
   const toolCalls: QueryLogDraft['toolCalls'] = [];
+  const references: BillReference[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
   let rejections = 0;
@@ -123,6 +129,7 @@ export async function runAgentTurn(
     return {
       envelope,
       history: working,
+      references,
       errorDetail,
       log: {
         route: 'agent',
@@ -166,6 +173,7 @@ export async function runAgentTurn(
       for (const call of calls) {
         const result = await executeToolCall(call, { db: deps.db, validation: deps.validation });
         toolCalls.push({ name: call.function.name, status: result.status });
+        references.push(...(result.references ?? []));
         working.push({ role: 'tool', tool_call_id: call.id, content: result.content });
 
         if (result.status === 'rejected') rejections += 1;

@@ -37,14 +37,68 @@ export type ExecutionStatus =
   /** A write, waiting on the user's tap (§6.4). */
   | 'pending';
 
+/**
+ * A name in the answer that a tool result can prove belongs to a bill.
+ *
+ * Collected from rows rather than asked of the model. A citation the model
+ * invents is exactly as convincing as one it did not, and a link to the wrong
+ * receipt is worse than no link — so the only names that can become links are
+ * ones the database returned alongside the bill they came from.
+ */
+export interface BillReference {
+  billId: number;
+  /** The item or merchant name, spelled as it is stored. */
+  label: string;
+}
+
 export interface ExecutionResult {
   /** The tool message content, verbatim. */
   content: string;
   status: ExecutionStatus;
+  /** Names this result can vouch for. Never sent to the model. */
+  references?: BillReference[];
 }
 
-function reply(payload: unknown, status: ExecutionStatus): ExecutionResult {
-  return { content: JSON.stringify(payload), status };
+function reply(
+  payload: unknown,
+  status: ExecutionStatus,
+  references?: BillReference[]
+): ExecutionResult {
+  return { content: JSON.stringify(payload), status, ...(references ? { references } : {}) };
+}
+
+function reference(billId: unknown, label: unknown): BillReference | null {
+  if (typeof billId !== 'number' || typeof label !== 'string') return null;
+  const trimmed = label.trim();
+  return trimmed === '' ? null : { billId, label: trimmed };
+}
+
+/**
+ * Which rows carry a bill to link to.
+ *
+ * Only the two list shapes do. An aggregate row is a sum over many bills and
+ * has no single receipt behind it — "$214 on groceries" is not a link, and
+ * pretending otherwise would send the user to whichever bill happened to be
+ * first.
+ */
+function referencesFrom(shape: string, rows: Record<string, unknown>[]): BillReference[] {
+  const found: BillReference[] = [];
+
+  for (const row of rows) {
+    if (shape === 'items') {
+      // Both spellings (§4.7): the model may answer in either, and the local
+      // name is the one a bilingual user is most likely to have asked with.
+      for (const key of ['name', 'name_local']) {
+        const entry = reference(row.bill_id, row[key]);
+        if (entry) found.push(entry);
+      }
+    } else if (shape === 'bills') {
+      const entry = reference(row.id, row.merchant);
+      if (entry) found.push(entry);
+    }
+  }
+
+  return found;
 }
 
 function rejection(code: string, message: string): ExecutionResult {
@@ -88,7 +142,8 @@ async function runQuery(
             : 'printed_bill_totals',
       notes: notes.length > 0 ? notes : undefined,
     },
-    'ok'
+    'ok',
+    referencesFrom(compiled.shape, rows)
   );
 }
 
@@ -121,7 +176,15 @@ async function runBillDetail(
         price_cents: item.priceCents,
       })),
     },
-    'ok'
+    'ok',
+    [
+      ...(bill.merchant ? [{ billId: bill.id, label: bill.merchant }] : []),
+      ...bill.items.flatMap((item) =>
+        [item.name, item.nameLocal]
+          .map((label) => reference(bill.id, label))
+          .filter((entry): entry is BillReference => entry !== null)
+      ),
+    ]
   );
   // `raw_text` is deliberately absent. It is cold audit data (§4.4), it would
   // dominate the token cost of this result, and §0 puts only "per-question

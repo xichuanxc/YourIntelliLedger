@@ -24,6 +24,7 @@ import { createByokChatTransport } from '@/agent/byokChatTransport';
 import { runAgentTurn } from '@/agent/loop';
 import type { ChatMessage } from '@/agent/messages';
 import type { AnswerEnvelope } from '@/agent/envelope';
+import type { BillReference } from '@/agent/execute';
 import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
@@ -34,6 +35,11 @@ export interface AskMessage {
   id: string;
   role: 'user' | 'assistant';
   text: string;
+  /**
+   * Names in `text` that a tool result proved belong to a bill, so the answer
+   * can lead to the receipt behind it.
+   */
+  references?: BillReference[];
   /**
    * The answer's structured half (§14.7). Kept even though Week 7 renders
    * none of it: Week 8's charts, chips and confirmation cards read from here,
@@ -97,7 +103,13 @@ export const useAskStore = create<AskState>((set, get) => ({
     set((state) => ({
       messages: [
         ...state.messages,
-        { id: nextId(), role: 'assistant', text: answer, envelope: turn.envelope },
+        {
+          id: nextId(),
+          role: 'assistant',
+          text: answer,
+          envelope: turn.envelope,
+          references: turn.references,
+        },
       ],
       history: turn.history,
       thinking: false,

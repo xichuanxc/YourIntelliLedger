@@ -12,6 +12,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import AskScreen from '@/app/(tabs)/ask';
+import { router } from 'expo-router';
 import { useAskStore, type AskMessage } from '@/ui/stores/ask-store';
 
 // A factory rather than an automock: automocking still *loads* the real
@@ -40,8 +41,11 @@ function withState(messages: AskMessage[], thinking = false) {
   mockedStore.mockReturnValue({ messages, thinking, send, history: [], clear: jest.fn() });
 }
 
+const push = jest.spyOn(router, 'push').mockImplementation(() => undefined);
+
 beforeEach(() => {
   send.mockClear();
+  push.mockClear();
 });
 
 describe('an empty conversation', () => {
@@ -109,5 +113,50 @@ describe('the conversation', () => {
     withState([{ id: 'b', role: 'assistant', text: 'You spent $12.' }]);
     await draw(<AskScreen />);
     expect(screen.queryByLabelText('Thinking')).toBeNull();
+  });
+});
+
+/**
+ * A name only becomes a link when a tool result vouched for it (§14.6's rule
+ * in another form: what the model says is not evidence). The matching rules
+ * are covered in `linkify`'s own suite; this checks the screen honours them
+ * and that a tap actually goes somewhere.
+ */
+describe('links to the bill behind an answer', () => {
+  it('opens the bill when a vouched-for name is tapped', async () => {
+    withState([
+      {
+        id: 'b',
+        role: 'assistant',
+        text: 'You bought milk 2l at Countdown.',
+        references: [{ billId: 7, label: 'milk 2l' }],
+      },
+    ]);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('milk 2l, open the bill'));
+    expect(push).toHaveBeenCalledWith({ pathname: '/bill/[id]', params: { id: 7 } });
+  });
+
+  it('leaves a name with no reference as plain text', async () => {
+    withState([
+      { id: 'b', role: 'assistant', text: 'You spent $214 on groceries.', references: [] },
+    ]);
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText(/open the bill/)).toBeNull();
+  });
+
+  it('never links inside the user’s own message', async () => {
+    withState([
+      { id: 'a', role: 'user', text: 'how much milk 2l did I buy?' },
+      {
+        id: 'b',
+        role: 'assistant',
+        text: 'Two.',
+        references: [{ billId: 7, label: 'milk 2l' }],
+      },
+    ]);
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText('milk 2l, open the bill')).toBeNull();
   });
 });

@@ -18,6 +18,7 @@
  * unstable — it is what Week 7 ships, not a placeholder for it.
  */
 
+import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,6 +32,7 @@ import {
   View,
 } from 'react-native';
 
+import { linkify } from '@/ui/linkify';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
@@ -187,6 +189,8 @@ function Bubble({ message }: { message: AskMessage }) {
   const theme = useTheme();
   const mine = message.role === 'user';
 
+  const segments = mine ? null : linkify(message.text, message.references ?? []);
+
   return (
     <View
       style={[
@@ -196,7 +200,27 @@ function Bubble({ message }: { message: AskMessage }) {
           backgroundColor: mine ? theme.primary : theme.backgroundElement,
         },
       ]}>
-      <ThemedText style={mine ? { color: theme.textInverse } : undefined}>{message.text}</ThemedText>
+      <ThemedText style={mine ? { color: theme.textInverse } : undefined}>
+        {segments
+          ? segments.map((segment, index) =>
+              segment.billId === undefined ? (
+                segment.text
+              ) : (
+                // Nested `Text` rather than a `Pressable`, so the link wraps
+                // with the sentence instead of becoming a block that breaks
+                // the line around it.
+                <ThemedText
+                  key={index}
+                  onPress={() => router.push({ pathname: '/bill/[id]', params: { id: segment.billId! } })}
+                  accessibilityRole="link"
+                  accessibilityLabel={`${segment.text}, open the bill`}
+                  style={[styles.link, { color: theme.primary, textDecorationColor: theme.primary }]}>
+                  {segment.text}
+                </ThemedText>
+              )
+            )
+          : message.text}
+      </ThemedText>
     </View>
   );
 }
@@ -205,6 +229,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
   listContent: { padding: Spacing.four, gap: Spacing.three },
+  link: { textDecorationLine: 'underline' },
   bubble: {
     maxWidth: '85%',
     borderRadius: Radius.large,
