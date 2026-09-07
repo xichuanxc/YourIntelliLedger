@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
@@ -25,6 +24,7 @@ import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 import { GearIcon } from '@/ui/components/gear-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
+import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { useLedgerStore } from '@/ui/stores/ledger-store';
 import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
@@ -32,6 +32,10 @@ import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 export default function LedgerScreen() {
   const theme = useTheme();
   const { months, status, search, error, setSearch, refresh } = useLedgerStore();
+
+  // The last row has two things over it, not one: iOS's translucent tab bar,
+  // and the floating button on both platforms.
+  const listBottomPadding = useFabBottom() + FAB_SIZE + Spacing.four;
 
   // Refetch on focus rather than on mount: returning from the edit or capture
   // screen has to show the change, and those screens are separate routes.
@@ -97,7 +101,11 @@ export default function LedgerScreen() {
         <SectionList
           sections={sections}
           keyExtractor={(bill) => String(bill.id)}
-          contentContainerStyle={sections.length === 0 ? styles.emptyContainer : styles.listContent}
+          contentContainerStyle={
+            sections.length === 0
+              ? styles.emptyContainer
+              : [styles.listContent, { paddingBottom: listBottomPadding }]
+          }
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
@@ -333,21 +341,21 @@ function DevClearButton() {
  * different answer.
  */
 
+const FAB_SIZE = 56;
+
 /**
- * UIKit's standard tab bar, excluding the home indicator area, which
- * `useSafeAreaInsets` reports separately and which is 0 on a device without
- * one (an iPhone SE, for instance).
+ * Where the button sits above the bottom of the content area. Shared with the
+ * list, which has to reserve room for it: the tab bar is not the only thing
+ * that can cover the last row.
  */
-const IOS_TAB_BAR_HEIGHT = 49;
+function useFabBottom(): number {
+  const tabBarInset = useTabBarInset();
+  return Platform.OS === 'android' ? Spacing.five : tabBarInset + Spacing.four;
+}
 
 function AddBillAction() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-
-  const bottom =
-    Platform.OS === 'android'
-      ? Spacing.five
-      : insets.bottom + IOS_TAB_BAR_HEIGHT + Spacing.four;
+  const bottom = useFabBottom();
 
   // Scanning is what the button is for: it is the path §5.2 puts first, and
   // the one that straightens the receipt before OCR. Landing on a menu first
@@ -396,7 +404,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   busy: { opacity: 0.4 },
-  listContent: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.seven * 2 },
+  // `paddingBottom` is applied at the call site, from the tab bar and the
+  // floating button, both of which are only known at render time.
+  listContent: { paddingHorizontal: Spacing.four },
   emptyContainer: { flexGrow: 1 },
   sectionHeader: {
     flexDirection: 'row',

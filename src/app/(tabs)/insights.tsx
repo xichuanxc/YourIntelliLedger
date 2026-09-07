@@ -34,6 +34,7 @@ import { Screen } from '@/ui/components/screen';
 import { SelectMenu } from '@/ui/components/select-menu';
 import { StatTile } from '@/ui/components/stat-tile';
 import { ThemedText } from '@/ui/components/themed-text';
+import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { MaxContentWidth, Radius, Spacing } from '@/ui/theme';
 
@@ -84,6 +85,9 @@ interface InsightsData {
 export default function InsightsScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
+  // Without this the merchant donut — the last thing on the screen — scrolls
+  // to rest underneath iOS's translucent tab bar.
+  const tabBarInset = useTabBarInset();
 
   const [range, setRange] = useState<RangeKey>('m3');
   const [data, setData] = useState<InsightsData | null>(null);
@@ -241,7 +245,7 @@ export default function InsightsScreen() {
   return (
     <Screen>
       <Header />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarInset + Spacing.seven }]}>
         <SelectMenu label="Period" options={RANGE_OPTIONS} value={range} onChange={setRange} />
 
         <ThemedText type="small" themeColor="textSecondary">
@@ -397,7 +401,9 @@ function Section({
 
 const styles = StyleSheet.create({
   header: { padding: Spacing.four, paddingBottom: Spacing.two },
-  content: { padding: Spacing.four, paddingTop: 0, gap: Spacing.four, paddingBottom: Spacing.seven },
+  // `paddingBottom` is applied at the call site, where the tab bar's
+  // height is known.
+  content: { padding: Spacing.four, paddingTop: 0, gap: Spacing.four },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tiles: { flexDirection: 'row', gap: Spacing.three },
   section: { gap: Spacing.two, marginTop: Spacing.three },
