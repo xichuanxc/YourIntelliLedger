@@ -160,8 +160,25 @@ two very different things, and you must tell them apart:
 
 The test is simple: is there a printed `@ $rate/unit` on this line? If yes,
 it's weighed — capture the weight and the rate. If no, it's packaged —
-`qty: 1, unit: "pack"` regardless of what number appears in the product
-name.
+`unit: "pack"` regardless of what number appears in the product name.
+
+**`qty: 1` there means one pack per scan, not one pack per line.** A
+multibuy prints one line covering several packs, and the pack count belongs
+in both `qty` and `scan_units`:
+
+- `G/VALLY MILK 2L  2 FOR $7.50`: two 2-litre bottles for $7.50 →
+  `qty: 2`, `unit: "pack"`, `scan_units: 2`, `price_cents: 750`,
+  `unit_price_cents: null`. **Not** `qty: 2, unit: "l"` — the 2 in "2 FOR"
+  counts bottles, the 2 in "2L" describes one bottle, and putting either
+  number in the wrong field says the shopper bought two litres when they
+  bought four.
+- `CD PREMIUM HAM SAUSAGE 200g  2 @ $2.50  $4.99`: `qty: 2`,
+  `unit: "pack"`, `scan_units: 2`.
+
+Read "N FOR \$X", "N @ \$Y", and a bare leading "N" the same way: N is how
+many of the packaged thing were bought, and the price on the line covers
+all N. The size printed in the product name always describes **one** of
+them, never the whole line.
 
 ## Discounts
 

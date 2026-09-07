@@ -139,6 +139,7 @@ function withUnitPrices(rows: Record<string, unknown>[]): Record<string, unknown
       unit: (row.unit ?? 'pc') as UnitPriceInput['unit'],
       priceCents: typeof row.price_cents === 'number' ? row.price_cents : null,
       unitPriceCents: typeof row.unit_price_cents === 'number' ? row.unit_price_cents : null,
+      scanUnits: typeof row.scan_units === 'number' ? row.scan_units : null,
     });
 
     if (!rate) return row;

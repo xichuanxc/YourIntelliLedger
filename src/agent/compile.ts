@@ -266,6 +266,8 @@ const ITEM_COLUMNS =
   // the most trustworthy input to a comparable per-unit price and the only one
   // that cannot be derived from anything else in the row.
   'bill_items.unit_price_cents AS unit_price_cents, ' +
+  // How many times the line was rung up — the pack count for a multibuy (§4.9).
+  'bill_items.scan_units AS scan_units, ' +
   'bills.purchased_at AS purchased_at, bills.merchant AS merchant';
 
 function shapeOf(query: ValidatedQuery): ResultShape {

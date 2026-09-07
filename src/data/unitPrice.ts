@@ -49,6 +49,20 @@ export interface UnitPriceInput {
   priceCents: number | null;
   /** The rate the till printed, per `unit`. Only for weighed lines (§4.9). */
   unitPriceCents?: number | null;
+  /**
+   * How many times the till rang this line up (§4.9).
+   *
+   * Used only as a *floor* on the number of packages, and only where the size
+   * comes from the name. A multibuy — `G/VALLY MILK 2L 2 FOR $7.50` — can be
+   * parsed as one pack scanned twice, and then `qty` alone says two litres
+   * where the shopper carried home four. For packaged goods each scan is one
+   * package, so the larger of the two is the honest count.
+   *
+   * Never a substitute for `qty`. `CROISSANTS LARGE 3PK` is `qty: 3,
+   * scan_units: 1` — one thing scanned, three croissants eaten — and that path
+   * does not come through here.
+   */
+  scanUnits?: number | null;
 }
 
 /** A size read out of a product name, in its own units. */
@@ -188,9 +202,12 @@ export function unitPriceOf(item: UnitPriceInput): UnitPrice | null {
    * thing scanned, three croissants eaten — and the question here is how much
    * was bought, not how many times the till beeped.
    */
+  // How many packages this line covers. See `scanUnits` above.
+  const packages = Math.max(qty, item.scanUnits ?? 0) || 1;
+
   if (size && size.basis !== 'item') {
     return {
-      cents: round(item.priceCents / (size.magnitude * qty)),
+      cents: round(item.priceCents / (size.magnitude * packages)),
       basis: size.basis,
       source: 'name',
     };
@@ -210,7 +227,7 @@ export function unitPriceOf(item: UnitPriceInput): UnitPrice | null {
   // 5. A count only the name knows: "Croissants Large 3pk" as one pack.
   if (size) {
     return {
-      cents: round(item.priceCents / (size.magnitude * qty)),
+      cents: round(item.priceCents / (size.magnitude * packages)),
       basis: 'item',
       source: 'name',
     };

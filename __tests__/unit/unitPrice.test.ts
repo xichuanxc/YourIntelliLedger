@@ -103,6 +103,27 @@ describe('the three sources, in order of trust', () => {
    * not how many times the till beeped, so a count in the name must not
    * multiply a `pc` quantity that already expanded it.
    */
+  /**
+   * The same multibuy, but parsed the other way — one pack, scanned twice.
+   * `qty` alone then says two litres where four were carried home, so
+   * `scan_units` is used as a floor on the package count (§4.9).
+   */
+  it('uses scan_units when a multibuy was parsed as one pack scanned twice', () => {
+    expect(
+      unitPriceOf(
+        item({ name: 'G/VALLY MILK 2L', qty: 1, unit: 'pack', scanUnits: 2, priceCents: 750 })
+      )
+    ).toEqual({ cents: 187.5, basis: 'litre', source: 'name' });
+  });
+
+  it('does not let scan_units shrink a quantity that is already larger', () => {
+    expect(
+      unitPriceOf(
+        item({ name: 'CD Ham Sausage 200g', qty: 2, unit: 'pack', scanUnits: 1, priceCents: 499 })
+      )
+    ).toEqual({ cents: 1247.5, basis: 'kilogram', source: 'name' });
+  });
+
   it('does not double-count a pack the quantity already expanded', () => {
     expect(
       unitPriceOf(item({ name: 'Croissants Large 3pk', qty: 3, unit: 'pc', priceCents: 399 }))
