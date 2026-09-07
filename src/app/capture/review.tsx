@@ -255,8 +255,8 @@ export default function ReviewScreen() {
             label="Store address"
             value={merchantAddress}
             onChangeText={setMerchantAddress}
-            placeholder="As printed on the receipt"
-            hint="Used to show the shop on a map. Leave blank if the receipt prints none."
+            placeholder="17 Mill Street, Hamilton"
+            hint="As printed on the receipt. Used to show the shop on a map. Leave blank if the receipt prints none."
           />
         </View>
 

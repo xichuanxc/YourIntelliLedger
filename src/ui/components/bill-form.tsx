@@ -263,14 +263,17 @@ export function BillForm({ initial, submitLabel, onSubmit, onCancel }: BillFormP
           />
         </View>
 
+        {/*
+          No placeholder. A bare "7" said nothing about what the field wants
+          and read as a default worth keeping. The hint carries the meaning.
+        */}
         <TextField
           label="Units sold"
           value={unitsSold}
           onChangeText={setUnitsSold}
-          placeholder="7"
           keyboardType="number-pad"
           error={errors.unitsSold}
-          hint="The scan-unit count printed on the receipt, if it shows one."
+          hint="The count the receipt prints for the whole bill, if it prints one — the sum of every line's scan units. Leave blank if there is none."
         />
 
         <View style={styles.itemsHeader}>
@@ -343,6 +346,7 @@ export function BillForm({ initial, submitLabel, onSubmit, onCancel }: BillFormP
                 onChangeText={(value) => patchItem(item.key, { qty: value })}
                 keyboardType="decimal-pad"
                 error={errors[`item-${item.key}-qty`]}
+                hint="How much you bought — a 3-pack is 3."
                 containerStyle={styles.flex}
               />
               <TextField
@@ -371,7 +375,7 @@ export function BillForm({ initial, submitLabel, onSubmit, onCancel }: BillFormP
               onChangeText={(value) => patchItem(item.key, { scanUnits: value })}
               keyboardType="number-pad"
               error={errors[`item-${item.key}-scanUnits`]}
-              hint="What the till counted — a 3-pack is one scan unit."
+              hint="How many times it was rung up — a 3-pack is 1."
             />
           </View>
         ))}
