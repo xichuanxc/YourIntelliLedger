@@ -35,7 +35,16 @@ import { TransportRequestError, TransportUnavailableError } from '@/agent/parseT
 const TIMEOUT_MS = 60_000;
 
 interface HubError {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    /**
+     * The provider's own complaint, when it made one. Shown only in a
+     * development build — it is the difference between "the provider rejected
+     * the request" and knowing which field it objected to.
+     */
+    detail?: string;
+  };
 }
 
 interface HubChatResponse {
@@ -106,10 +115,15 @@ export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTra
       const body = (await response.json().catch(() => ({}))) as HubChatResponse & HubError;
 
       if (!response.ok) {
+        // The detail leads, because this message becomes the loop's
+        // `errorDetail` and the `[dev]` line in the answer. A user never sees
+        // it in a release build.
+        const detail = body.error?.detail;
+        const message = body.error?.message ?? `The hub returned HTTP ${response.status}.`;
         throw toTransportError(
           response.status,
           body.error?.code,
-          body.error?.message ?? `The hub returned HTTP ${response.status}.`
+          detail ? `${message} ${detail}` : message
         );
       }
 
