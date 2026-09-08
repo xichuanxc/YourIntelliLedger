@@ -101,6 +101,23 @@ export default function AskScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/*
+          Tapping the conversation dismisses the keyboard, and it is the only
+          way out on this screen: iOS draws the keyboard over the tab bar, so
+          while it is up there is no way to leave Ask. A message list can be
+          dragged down, but an empty conversation has nothing to drag — which
+          is exactly the state a first-time user is in.
+
+          `accessible={false}` so a screen reader still reads the empty state
+          as text rather than announcing the whole panel as one button; the
+          keyboard is dismissible by other means there anyway.
+        */}
+        <Pressable
+          style={styles.flex}
+          testID="ask-dismiss-keyboard"
+          accessible={false}
+          onPress={Keyboard.dismiss}
+          android_disableSound>
         {messages.length === 0 ? (
           <View style={styles.flex}>
             <EmptyState
@@ -120,10 +137,13 @@ export default function AskScreen() {
             renderItem={({ item }) => <Bubble message={item} />}
             // The list holds the answers, so it should not eat a tap meant for
             // the keyboard's dismissal.
-            keyboardDismissMode="on-drag"
+            // `interactive` follows the finger on iOS, which is what people
+            // expect from a chat; Android has no such mode.
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             keyboardShouldPersistTaps="handled"
           />
         )}
+        </Pressable>
 
         {thinking && (
           <View style={styles.thinking} accessibilityRole="progressbar" accessibilityLabel="Thinking">
@@ -145,10 +165,18 @@ export default function AskScreen() {
               paddingBottom: (keyboardShown ? 0 : tabBarInset) + Spacing.three,
             },
           ]}>
+          {/*
+            `submitBehavior="submit"` is what makes Return send rather than
+            insert a newline. Without it a multiline input ignores
+            `returnKeyType` on iOS and `onSubmitEditing` never fires, so the
+            keyboard has no key that does anything — which, with the tab bar
+            underneath it, left the screen with no way out at all.
+          */}
           <TextInput
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={submit}
+            submitBehavior="submit"
             placeholder="Ask a question"
             placeholderTextColor={theme.textSecondary}
             accessibilityLabel="Your question"

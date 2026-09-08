@@ -9,6 +9,7 @@
  */
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Keyboard } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import AskScreen from '@/app/(tabs)/ask';
@@ -158,5 +159,47 @@ describe('links to the bill behind an answer', () => {
     ]);
     await draw(<AskScreen />);
     expect(screen.queryByLabelText('milk 2l, open the bill')).toBeNull();
+  });
+});
+
+/**
+ * iOS draws the keyboard over the tab bar, so while it is up there is no way
+ * to leave this screen. That made two ordinary omissions into a trap: a
+ * multiline input ignores `returnKeyType` — its Return key inserts a newline
+ * and `onSubmitEditing` never fires — and an empty conversation has nothing to
+ * drag downwards, which is exactly the state a first-time user is in.
+ */
+describe('getting the keyboard back down', () => {
+  it('sends on Return rather than typing a newline into the question', async () => {
+    withState([]);
+    await draw(<AskScreen />);
+
+    await fireEvent.changeText(screen.getByLabelText('Your question'), 'how much in June?');
+    await fireEvent(screen.getByLabelText('Your question'), 'submitEditing');
+
+    expect(send).toHaveBeenCalledWith('how much in June?');
+  });
+
+  it('dismisses the keyboard when the conversation is tapped', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    withState([{ id: 'b', role: 'assistant', text: 'You spent $12.' }]);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByTestId('ask-dismiss-keyboard'));
+
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
+  });
+
+  /** The empty state is the case that had no escape at all. */
+  it('dismisses from an empty conversation too', async () => {
+    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+    withState([]);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByTestId('ask-dismiss-keyboard'));
+
+    expect(dismiss).toHaveBeenCalled();
+    dismiss.mockRestore();
   });
 });
