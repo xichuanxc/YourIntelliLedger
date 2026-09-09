@@ -180,15 +180,21 @@ describe('getting the keyboard back down', () => {
     expect(send).toHaveBeenCalledWith('how much in June?');
   });
 
-  it('dismisses the keyboard when the conversation is tapped', async () => {
-    const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
+  /**
+   * The populated conversation must **not** get that wrapper. A `Pressable`
+   * parent claims the touch before a `FlatList` can start a scroll, so
+   * wrapping the list in one stops it scrolling at all — which is what
+   * happened the first time this was fixed. The list dismisses through
+   * `keyboardShouldPersistTaps="handled"` instead, which fires only when no
+   * child claimed the tap.
+   */
+  it('does not wrap the message list in a press target', async () => {
     withState([{ id: 'b', role: 'assistant', text: 'You spent $12.' }]);
     await draw(<AskScreen />);
 
-    await fireEvent.press(screen.getByTestId('ask-dismiss-keyboard'));
-
-    expect(dismiss).toHaveBeenCalled();
-    dismiss.mockRestore();
+    expect(screen.queryByTestId('ask-dismiss-keyboard')).toBeNull();
+    // The answer is still there — the list rendered, it is just not wrapped.
+    expect(screen.getByText('You spent $12.')).toBeTruthy();
   });
 
   /** The empty state is the case that had no escape at all. */

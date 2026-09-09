@@ -101,25 +101,27 @@ export default function AskScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/*
-          Tapping the conversation dismisses the keyboard, and it is the only
-          way out on this screen: iOS draws the keyboard over the tab bar, so
-          while it is up there is no way to leave Ask. A message list can be
-          dragged down, but an empty conversation has nothing to drag — which
-          is exactly the state a first-time user is in.
-
-          `accessible={false}` so a screen reader still reads the empty state
-          as text rather than announcing the whole panel as one button; the
-          keyboard is dismissible by other means there anyway.
-        */}
-        <Pressable
-          style={styles.flex}
-          testID="ask-dismiss-keyboard"
-          accessible={false}
-          onPress={Keyboard.dismiss}
-          android_disableSound>
         {messages.length === 0 ? (
-          <View style={styles.flex}>
+          /*
+            Only the empty state needs this. iOS draws the keyboard over the
+            tab bar, so while it is up there is no way to leave Ask — and an
+            empty conversation has nothing to drag and nothing to tap, which is
+            exactly the state a first-time user is in.
+
+            **Not** around the list. A `Pressable` parent claims the touch
+            before a `FlatList` can start a scroll, so wrapping the
+            conversation in one stops it scrolling at all. The list dismisses
+            by other means; see its props below.
+
+            `accessible={false}` so a screen reader reads the empty state as
+            text rather than announcing the whole panel as one button.
+          */
+          <Pressable
+            style={styles.flex}
+            testID="ask-dismiss-keyboard"
+            accessible={false}
+            onPress={Keyboard.dismiss}
+            android_disableSound>
             <EmptyState
               title="Ask about your spending"
               message={
@@ -127,7 +129,7 @@ export default function AskScreen() {
                 'go to most?”. Answers come from the bills on this phone.'
               }
             />
-          </View>
+          </Pressable>
         ) : (
           <FlatList
             ref={list}
@@ -140,10 +142,14 @@ export default function AskScreen() {
             // `interactive` follows the finger on iOS, which is what people
             // expect from a chat; Android has no such mode.
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            // "handled" is what makes a tap on the conversation dismiss the
+            // keyboard while a tap on a bill link still opens the bill: the
+            // list dismisses only when no child claimed the touch. This is
+            // also why the list needs no `Pressable` around it — one would
+            // claim every touch, scrolls included.
             keyboardShouldPersistTaps="handled"
           />
         )}
-        </Pressable>
 
         {thinking && (
           <View style={styles.thinking} accessibilityRole="progressbar" accessibilityLabel="Thinking">
