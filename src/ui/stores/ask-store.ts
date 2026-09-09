@@ -21,6 +21,7 @@ import { create } from 'zustand';
 import { catalogCache } from '@/agent/catalogCache';
 import { getDataCatalog } from '@/agent/catalog';
 import { createHubChatTransport } from '@/agent/hubChatTransport';
+import { partialAnswer } from '@/agent/envelopeStream';
 import { runAgentTurn } from '@/agent/loop';
 import type { ChatMessage } from '@/agent/messages';
 import type { AnswerEnvelope } from '@/agent/envelope';
@@ -53,6 +54,14 @@ interface AskState {
   history: ChatMessage[];
   /** True from send until the answer lands — what the typing indicator reads. */
   thinking: boolean;
+  /**
+   * The answer as it arrives, decoded from §14.7's half-written envelope.
+   *
+   * Empty until the model starts writing its `text` field, which is why the
+   * typing indicator stays up during a tool call — there is genuinely nothing
+   * to show yet, and inventing something would be worse than waiting.
+   */
+  streaming: string;
   send: (text: string) => Promise<void>;
   clear: () => void;
 }
@@ -64,8 +73,9 @@ export const useAskStore = create<AskState>((set, get) => ({
   messages: [],
   history: [],
   thinking: false,
+  streaming: '',
 
-  clear: () => set({ messages: [], history: [], thinking: false }),
+  clear: () => set({ messages: [], history: [], thinking: false, streaming: '' }),
 
   send: async (text: string) => {
     const question = text.trim();
@@ -74,6 +84,7 @@ export const useAskStore = create<AskState>((set, get) => ({
     set((state) => ({
       messages: [...state.messages, { id: nextId(), role: 'user', text: question }],
       thinking: true,
+      streaming: '',
     }));
 
     const db = await getDb();
@@ -92,6 +103,10 @@ export const useAskStore = create<AskState>((set, get) => ({
       db,
       catalog,
       validation: { today: todayLocalDate(), firstBill: range.firstBill },
+      // A preview only. `parseEnvelope` produces the authoritative text below
+      // and replaces whatever was shown, so a partial decode that guesses
+      // wrong corrects itself rather than persisting.
+      onDelta: (raw) => set({ streaming: partialAnswer(raw) }),
     });
 
     // The provider's own words, in a development build only. Without them a
@@ -116,6 +131,7 @@ export const useAskStore = create<AskState>((set, get) => ({
       ],
       history: turn.history,
       thinking: false,
+      streaming: '',
     }));
 
     try {

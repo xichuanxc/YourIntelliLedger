@@ -126,3 +126,114 @@ describe('failures the user cannot', () => {
     ).rejects.toThrow(/no message/i);
   });
 });
+
+/**
+ * §13.2's event stream, read back into the same `ChatReply` a whole response
+ * gives — streaming is a delivery detail, and nothing above the transport
+ * should be able to tell which one it got.
+ */
+describe('the streamed form', () => {
+  const encoder = new TextEncoder();
+
+  /** A hub SSE response, delivered in whatever pieces the caller asks for. */
+  function sse(...pieces: string[]) {
+    return jest.fn(
+      async (_url: string, _init: { body?: string }) =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              for (const piece of pieces) controller.enqueue(encoder.encode(piece));
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } }
+        )
+    );
+  }
+
+  const meta = 'event: hub_meta\ndata: {"model_used":"m","usage":{"prompt_tokens":9}}\n\n';
+
+  it('asks for a stream only when someone is listening', async () => {
+    const quiet = stub(answer);
+    await createHubChatTransport(quiet as unknown as typeof fetch).chat(request);
+    expect(JSON.parse(quiet.mock.calls[0][1].body as string).stream).toBe(false);
+
+    const loud = sse(meta, 'data: [DONE]\n\n');
+    await createHubChatTransport(loud as unknown as typeof fetch).chat(request, () => {});
+    expect(JSON.parse(loud.mock.calls[0][1].body as string).stream).toBe(true);
+  });
+
+  it('reports everything received so far, not the increment', async () => {
+    const seen: string[] = [];
+    const fetchImpl = sse(
+      'data: {"delta":"{\\"text\\":\\"You "}\n\n',
+      'data: {"delta":"spent $12.\\"}"}\n\n',
+      meta,
+      'data: [DONE]\n\n'
+    );
+
+    const reply = await createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(
+      request,
+      (raw) => seen.push(raw)
+    );
+
+    expect(seen).toEqual(['{"text":"You ', '{"text":"You spent $12."}']);
+    expect(reply.message.content).toBe('{"text":"You spent $12."}');
+    expect(reply.meta?.usage?.prompt_tokens).toBe(9);
+  });
+
+  /** A chunk boundary lands wherever the network puts it, not on a line. */
+  it('reassembles an event split across two reads', async () => {
+    const seen: string[] = [];
+    const fetchImpl = sse('data: {"del', 'ta":"hi"}\n\n', meta, 'data: [DONE]\n\n');
+
+    await createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(request, (raw) =>
+      seen.push(raw)
+    );
+
+    expect(seen).toEqual(['hi']);
+  });
+
+  it('delivers tool calls whole, as the non-streaming path does', async () => {
+    const fetchImpl = sse(
+      'event: tool_calls\ndata: [{"id":"c1","type":"function","function":{"name":"query_ledger","arguments":"{}"},"thought_signature":"sig"}]\n\n',
+      meta,
+      'data: [DONE]\n\n'
+    );
+
+    const reply = await createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(
+      request,
+      () => {}
+    );
+
+    expect(reply.message.tool_calls?.[0]).toMatchObject({
+      function: { name: 'query_ledger' },
+      thought_signature: 'sig',
+    });
+  });
+
+  /**
+   * The status was already 200 before the provider refused, so a failure can
+   * only arrive inside the body — and a stream that simply stops is a failed
+   * turn, not a short answer. Treating it as an answer would show a truncated
+   * sentence as if it were complete.
+   */
+  it('treats an error event as a failure, not an answer', async () => {
+    const fetchImpl = sse(
+      'data: {"delta":"You sp"}\n\n',
+      'event: error\ndata: {"code":"upstream_error","detail":"bad value at contents[1]"}\n\n'
+    );
+
+    await expect(
+      createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(request, () => {})
+    ).rejects.toThrow(/contents\[1\]/);
+  });
+
+  it('refuses a stream that stops before hub_meta', async () => {
+    const fetchImpl = sse('data: {"delta":"You sp"}\n\n');
+
+    await expect(
+      createHubChatTransport(fetchImpl as unknown as typeof fetch).chat(request, () => {})
+    ).rejects.toThrow(/stopped before it finished/);
+  });
+});

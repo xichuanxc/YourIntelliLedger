@@ -32,7 +32,7 @@
  * beyond the one the tools read.
  */
 
-import type { ChatTransport } from '@/agent/chatTransport';
+import type { ChatTransport, OnDelta } from '@/agent/chatTransport';
 import type { DataCatalog } from '@/agent/catalog';
 import { parseEnvelope, type AnswerEnvelope } from '@/agent/envelope';
 import { executeToolCall, type BillReference, type ExecutionStatus } from '@/agent/execute';
@@ -50,6 +50,15 @@ export const MAX_REJECTIONS = 2;
 
 export interface AgentDeps {
   transport: ChatTransport;
+  /**
+   * Called as an answer arrives, with the raw envelope so far (§6.2).
+   *
+   * Passed straight through to the transport and never interpreted here: a
+   * transport that cannot stream ignores it, and the turn behaves exactly as
+   * it always did. Each call to the model reports from zero, so a tool-call
+   * turn simply produces nothing to show.
+   */
+  onDelta?: OnDelta;
   db: SqlDriver;
   catalog: DataCatalog;
   validation: ValidationContext;
@@ -148,7 +157,7 @@ export async function runAgentTurn(
   const ask = async (allowTools: boolean): Promise<ChatReply> => {
     const request = assembleRequest({ catalog: deps.catalog, history: working }, false);
     if (!allowTools) request.tool_choice = 'none';
-    const reply = await deps.transport.chat(request);
+    const reply = await deps.transport.chat(request, deps.onDelta);
     tokensIn += reply.meta?.usage?.prompt_tokens ?? 0;
     tokensOut += reply.meta?.usage?.completion_tokens ?? 0;
     return reply;

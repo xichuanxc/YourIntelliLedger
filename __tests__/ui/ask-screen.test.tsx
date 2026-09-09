@@ -38,8 +38,15 @@ const draw = (ui: React.ReactElement) =>
 const mockedStore = useAskStore as unknown as jest.Mock;
 const send = jest.fn();
 
-function withState(messages: AskMessage[], thinking = false) {
-  mockedStore.mockReturnValue({ messages, thinking, send, history: [], clear: jest.fn() });
+function withState(messages: AskMessage[], thinking = false, streaming = '') {
+  mockedStore.mockReturnValue({
+    messages,
+    thinking,
+    streaming,
+    send,
+    history: [],
+    clear: jest.fn(),
+  });
 }
 
 const push = jest.spyOn(router, 'push').mockImplementation(() => undefined);
@@ -207,5 +214,43 @@ describe('getting the keyboard back down', () => {
 
     expect(dismiss).toHaveBeenCalled();
     dismiss.mockRestore();
+  });
+});
+
+/**
+ * §6.2's streaming, as the screen shows it. The indicator gives way to the
+ * answer the moment there is one; during a tool call there is genuinely
+ * nothing to show, because the model is choosing a query rather than writing.
+ */
+describe('an answer arriving', () => {
+  it('shows the indicator while there is nothing yet to read', async () => {
+    withState([{ id: 'a', role: 'user', text: 'how much?' }], true, '');
+    await draw(<AskScreen />);
+
+    expect(screen.getByLabelText('Thinking')).toBeTruthy();
+  });
+
+  it('replaces the indicator with the answer as it arrives', async () => {
+    withState([{ id: 'a', role: 'user', text: 'how much?' }], true, 'You spent ');
+    await draw(<AskScreen />);
+
+    expect(screen.queryByLabelText('Thinking')).toBeNull();
+    expect(screen.getByText('You spent ')).toBeTruthy();
+  });
+
+  /** A screen reader should not read a half-written sentence as the answer. */
+  it('marks a partial answer as still arriving', async () => {
+    withState([], true, 'You spent ');
+    await draw(<AskScreen />);
+
+    expect(screen.getByLabelText('Answer, still arriving')).toBeTruthy();
+  });
+
+  it('shows nothing extra once the turn is done', async () => {
+    withState([{ id: 'b', role: 'assistant', text: 'You spent $12.' }], false, '');
+    await draw(<AskScreen />);
+
+    expect(screen.queryByLabelText('Answer, still arriving')).toBeNull();
+    expect(screen.queryByLabelText('Thinking')).toBeNull();
   });
 });

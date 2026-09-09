@@ -73,7 +73,7 @@ export default function AskScreen() {
   const theme = useTheme();
   const tabBarInset = useTabBarInset();
   const keyboardShown = useKeyboardShown();
-  const { messages, thinking, send } = useAskStore();
+  const { messages, thinking, streaming, send } = useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
 
@@ -81,7 +81,9 @@ export default function AskScreen() {
   // answer nobody read.
   useEffect(() => {
     if (messages.length > 0) list.current?.scrollToEnd({ animated: true });
-  }, [messages.length, thinking]);
+    // `streaming` too: an answer that grows past the fold while the user
+    // watches should keep its last line in view.
+  }, [messages.length, thinking, streaming]);
 
   const submit = () => {
     const text = draft.trim();
@@ -151,12 +153,28 @@ export default function AskScreen() {
           />
         )}
 
-        {thinking && (
+        {/*
+          The indicator gives way to the answer the moment there is one to
+          show. Until then it stays up, and during a tool call there is
+          genuinely nothing yet — the model is choosing a query, not writing a
+          sentence — which is why this waits for text rather than for the
+          request to start.
+        */}
+        {thinking && streaming === '' && (
           <View style={styles.thinking} accessibilityRole="progressbar" accessibilityLabel="Thinking">
             <ActivityIndicator size="small" />
             <ThemedText type="small" themeColor="textSecondary">
               Reading your ledger…
             </ThemedText>
+          </View>
+        )}
+
+        {streaming !== '' && (
+          <View style={styles.streaming}>
+            <Bubble
+              message={{ id: 'streaming', role: 'assistant', text: streaming }}
+              accessibilityLabel="Answer, still arriving"
+            />
           </View>
         )}
 
@@ -219,7 +237,14 @@ export default function AskScreen() {
   );
 }
 
-function Bubble({ message }: { message: AskMessage }) {
+function Bubble({
+  message,
+  accessibilityLabel,
+}: {
+  message: AskMessage;
+  /** Set while an answer is still arriving, so it is not read as finished. */
+  accessibilityLabel?: string;
+}) {
   const theme = useTheme();
   const mine = message.role === 'user';
 
@@ -227,6 +252,7 @@ function Bubble({ message }: { message: AskMessage }) {
 
   return (
     <View
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.bubble,
         {
@@ -270,6 +296,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
+  // Outside the list, so an answer in progress does not need a row inserting
+  // and removing on every token.
+  streaming: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
   thinking: {
     flexDirection: 'row',
     alignItems: 'center',

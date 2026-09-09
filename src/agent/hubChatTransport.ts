@@ -25,7 +25,9 @@
  * direct transport is a one-line change for a developer who needs it.
  */
 
-import type { ChatTransport } from '@/agent/chatTransport';
+import { fetch as expoFetch } from 'expo/fetch';
+
+import type { ChatTransport, OnDelta } from '@/agent/chatTransport';
 import { getAskKey } from '@/agent/byokKey';
 import type { ChatReply, ChatRequest, HubMeta } from '@/agent/messages';
 import { HUB_BASE_URL } from '@/agent/modelConfig';
@@ -80,11 +82,20 @@ function toTransportError(status: number, code: string | undefined, fallback: st
   }
 }
 
-export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTransport {
+/**
+ * `expo/fetch`, not the global — §6.2's ⚠️.
+ *
+ * React Native's own `fetch` is XHR-backed and **does not expose a readable
+ * stream**: `response.body` is null and the whole answer arrives at once. The
+ * failure mode is the dangerous one, because nothing errors — a naive port
+ * looks like it streams, returns the right text, passes every test about what
+ * was said, and takes exactly as long as it always did.
+ */
+export function createHubChatTransport(fetchImpl: typeof fetch = expoFetch as typeof fetch): ChatTransport {
   return {
     name: 'hub-chat',
 
-    async chat(request: ChatRequest): Promise<ChatReply> {
+    async chat(request: ChatRequest, onDelta?: OnDelta): Promise<ChatReply> {
       const key = await getAskKey();
       if (!key) {
         throw new TransportUnavailableError(
@@ -102,8 +113,9 @@ export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTra
             // why nothing in this file writes the request or its headers out.
             'X-BYOK': key,
           },
-          // Sent as assembled. The model name is an alias and stays one.
-          body: JSON.stringify(request),
+          // Sent as assembled, apart from `stream`, which is this transport's
+          // to decide: the loop asks for an answer, not for a delivery method.
+          body: JSON.stringify({ ...request, stream: onDelta !== undefined }),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
       } catch (error) {
@@ -111,6 +123,8 @@ export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTra
           error instanceof Error ? error.message : 'The hub could not be reached.'
         );
       }
+
+      if (response.ok && onDelta) return readStream(response, onDelta);
 
       const body = (await response.json().catch(() => ({}))) as HubChatResponse & HubError;
 
@@ -134,4 +148,104 @@ export function createHubChatTransport(fetchImpl: typeof fetch = fetch): ChatTra
       return { message: body.message, meta: body.hub_meta };
     },
   };
+}
+
+
+/**
+ * Reads §13.2's event stream into the same `ChatReply` a whole response gives.
+ *
+ * Streaming is a delivery detail, so nothing above this function knows it
+ * happened: the loop gets a reply, the tool calls arrive complete, and
+ * `hub_meta` becomes the usage it always was.
+ *
+ * A stream that ends without `hub_meta` is a failed turn, not a short answer —
+ * the status code was already sent as 200 before the provider refused, so the
+ * failure can only arrive inside the body.
+ */
+async function readStream(response: Response, onDelta: OnDelta): Promise<ChatReply> {
+  const body = response.body;
+  if (!body) throw new TransportRequestError('The hub sent an empty stream.');
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+
+  let buffer = '';
+  let raw = '';
+  let event: string | undefined;
+  let toolCalls: ChatReply['message']['tool_calls'];
+  let meta: HubMeta | undefined;
+  let failure: string | undefined;
+
+  const handle = (name: string | undefined, data: string) => {
+    if (data === '[DONE]') return;
+
+    if (name === 'error') {
+      const parsed = safeJson(data) as { code?: string; detail?: string } | null;
+      failure = parsed?.detail ?? parsed?.code ?? 'The provider failed mid-answer.';
+      return;
+    }
+    if (name === 'tool_calls') {
+      toolCalls = (safeJson(data) as ChatReply['message']['tool_calls']) ?? undefined;
+      return;
+    }
+    if (name === 'hub_meta') {
+      meta = (safeJson(data) as HubMeta) ?? undefined;
+      return;
+    }
+
+    const delta = (safeJson(data) as { delta?: string } | null)?.delta;
+    if (typeof delta === 'string' && delta !== '') {
+      raw += delta;
+      // Everything received so far, not the increment: the caller decodes a
+      // prefix of the envelope, which is not something increments compose to.
+      onDelta(raw);
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let newline = buffer.indexOf('\n');
+      while (newline !== -1) {
+        const line = buffer.slice(0, newline).trimEnd();
+        buffer = buffer.slice(newline + 1);
+
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) {
+          handle(event, line.slice(5).trim());
+          // An event name applies to the one frame that follows it.
+          event = undefined;
+        }
+
+        newline = buffer.indexOf('\n');
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (failure) throw new TransportRequestError(failure);
+  if (!meta) {
+    throw new TransportRequestError('The answer stopped before it finished.');
+  }
+
+  return {
+    message: {
+      content: raw === '' ? null : raw,
+      ...(toolCalls && toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+    },
+    meta,
+  };
+}
+
+function safeJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
