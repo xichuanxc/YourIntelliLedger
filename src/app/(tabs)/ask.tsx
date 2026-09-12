@@ -99,7 +99,12 @@ export default function AskScreen() {
     if (messages.length > 0) list.current?.scrollToEnd({ animated: true });
     // `streaming` too: an answer that grows past the fold while the user
     // watches should keep its last line in view.
-  }, [messages.length, thinking, streaming]);
+    //
+    // And `keyboardHeight`, because the list changes height when the keyboard
+    // opens. Without this the newest messages stay where they were and end up
+    // behind the composer — the conversation looks covered, when really it
+    // just did not scroll.
+  }, [messages.length, thinking, streaming, keyboardHeight]);
 
   const submit = () => {
     const text = draft.trim();
@@ -154,6 +159,11 @@ export default function AskScreen() {
             ref={list}
             data={messages}
             keyExtractor={(message) => message.id}
+            // `flex: 1`, or the list sizes to its content: a long conversation
+            // then grows past the space available and pushes its newest
+            // messages behind the composer instead of scrolling inside it.
+            // Only visible once the keyboard takes half the screen away.
+            style={styles.flex}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => <Bubble message={item} />}
             // The list holds the answers, so it should not eat a tap meant for
