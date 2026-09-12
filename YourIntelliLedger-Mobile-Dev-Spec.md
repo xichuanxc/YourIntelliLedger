@@ -2,7 +2,7 @@
 
 **Version:** 2.10 · **Date:** July 2026 · **Covers:** Weeks 3–10 of the 10-week plan
 **Platforms:** Android and iOS from a single codebase
-**Companion docs:** `YourIntelliLedger-Proposal.md`, `receipt-parse-prompt-v3.md`, `ocr_prototype.py`
+**Companion docs:** `YourIntelliLedger-Proposal.md`, `MobileApp/src/capture/prompts/receipt-parse-text.md` (§5.5), `ocr_prototype.py`
 
 **Changed in v2.10** — §12 item 1 (New Architecture gate) resolved for
 Android: ran a real `expo prebuild` + `./gradlew assembleDebug` against
@@ -29,29 +29,29 @@ this section was first written.
 **Changed in v2.8** — the OCR-then-LLM path this spec actually commits to
 (§5.1) has now been tested end to end in the Python prototype, not just
 assumed: ~96.3% mean field accuracy on the eleven-receipt corpus, ~1.2
-points behind a direct-image reference parse (§5.7). Two things that
+points behind a direct-image reference parse (§5.8). Two things that
 testing it for real surfaced and assuming it wouldn't have: recognition
 language must be configured explicitly or non-Latin script is silently
 dropped, not misread (§3, `ocr_prototype.py`'s `RECOGNITION_LANGUAGES`);
 and discount-to-item attribution is measurably weaker once a receipt is
-flattened to text instead of read as an image (§5.7). No schema change.
+flattened to text instead of read as an image (§5.8). No schema change.
 
 **Changed in v2.7** — `parse_receipt` can now return an itemless bill for a
 receipt that isn't a goods purchase (restaurant/cafe bill, service invoice)
 instead of declining it outright, so the payment is still recorded even
-though there's nothing to itemize honestly (§5.1, §5.5, §5.6, §4.4). No
+though there's nothing to itemize honestly (§5.1, §5.6, §5.7, §4.4). No
 schema change — itemless bills were already representable, just not
 reachable from the receipt-capture path until now. Proven against a real
 restaurant receipt in the Python prototype before landing here.
 
-**Changed in v2.6** — clarified what the §5.7 / §10 fixture-corpus accuracy
+**Changed in v2.6** — clarified what the §5.8 / §10 fixture-corpus accuracy
 figure actually measures (AI-graded-by-AI, backstopped by non-AI checks
-where possible — see §5.7). No schema or behaviour change.
+where possible — see §5.8). No schema or behaviour change.
 
 **Changed in v2.5** — two columns added after Python-prototype validation
 (§4.4): `bills.merchant_address` (§4.14, navigation) and
 `bill_items.unit_price_cents` (§4.9, weighed-item rate — this is also what
-finally gives the §5.5 #6 sanity check a `rate` to check against). Both were
+finally gives the §5.6 #6 sanity check a `rate` to check against). Both were
 proven against the five-receipt corpus before landing here.
 
 > **How to read this document.** Sections are platform-neutral by default. Anything that differs
@@ -255,7 +255,7 @@ Opened once at app start and exposed through `db.ts`.
 
 | Concern | Rule |
 |---|---|
-| Money | **Integer cents only.** No REAL, ever — floating-point money produces cent drift that breaks the sum checks in §5.5 |
+| Money | **Integer cents only.** No REAL, ever — floating-point money produces cent drift that breaks the sum checks in §5.6 |
 | Quantities | `REAL` (weighed goods are genuinely fractional: 0.605 kg) |
 | Purchase date | `purchased_at TEXT 'YYYY-MM-DD'` — **local calendar date as printed on the receipt**, never timezone-converted |
 | Purchase time | `purchased_time TEXT 'HH:MM'`, nullable — several receipts print it; keeping it separate leaves date grouping (§14.6) trivial |
@@ -409,7 +409,7 @@ Computed at save time and recorded in `bills.parse_flags` — never silently cor
 - any item `confidence = 'low'` → `low_confidence`
 - any `price_cents IS NULL` → `missing_price`
 
-Flags drive the review-screen banner (§5.6) and let a later query surface "receipts worth re-checking".
+Flags drive the review-screen banner (§5.7) and let a later query surface "receipts worth re-checking".
 
 **Correction capture (v2):** when a user edits a parsed field, the pre-edit value is currently discarded — only the `user_corrected` flag survives. A `parse_corrections` table (old value, new value, `raw_text`) would turn every user fix into prompt-improvement data. Worth building once the app has real users; not needed to ship.
 
@@ -434,7 +434,7 @@ Document scanner (primary)  ─┐
 Plain camera  (fallback)     ├→ flattened image → downscale & compress
 Gallery import (fallback)   ─┘        → ML Kit OCR (blocks + frames)
    → geometry correction (§5.3) → line reconstruction (§5.4) → raw text
-   → parse_receipt tool (LLM) → JSON → post-checks (§5.5)
+   → parse_receipt tool (LLM) → JSON → post-checks (§5.6)
    → Review screen → user confirms → DB write (single transaction)
 ```
 
@@ -483,7 +483,47 @@ Thresholds live in one config object, tuned against the fixture corpus.
 
 > **Cross-platform check (Wk 5):** ML Kit's block/line granularity can differ subtly between platforms. Run the same fixture receipts through both and compare reconstructed text; if granularity differs, the thresholds — not the algorithm — are what need adjusting.
 
-### 5.5 Post-checks *(code, not prompt)*
+### 5.5 The parsing prompt
+
+**Source of truth:** `MobileApp/src/capture/prompts/receipt-parse-text.md`.
+`npm run prompt:build` generates `receiptParseText.ts` from it, because Metro
+cannot import `.md`; a test asserts the generated file still matches, so
+editing the markdown without regenerating fails loudly rather than shipping a
+stale prompt.
+
+**It is not reproduced here on purpose.** A copy in this document would be a
+third one to keep in step, and that has already gone wrong: the Python
+prototype's `prompts/receipt_parse_text.md` is the same file minus the
+multibuy rule below. Cite the path, not the text.
+
+What the prompt is responsible for, and what it must keep guaranteeing:
+
+| Area | The rule it encodes |
+|---|---|
+| Output | one JSON object, no prose or fences; the app parses the raw response |
+| Scope | itemize physical goods; a restaurant/service bill returns `itemless: true` with `items: []` (§5.1) |
+| Vocabularies | `category` and `unit` exactly as §4.7 lists them — inventing a value costs the whole line |
+| Money | integer cents, never decimals; `null` means illegible, `0` means genuinely free |
+| `qty` vs `scan_units` | §4.9's distinction, with worked examples — the single thing most often got wrong |
+| Packaged vs weighed | a printed `@ $rate/unit` means weighed; a weight in the product *name* is packaging, so `unit: "pack"` |
+| Multibuy | `N FOR $X`, `N @ $Y` and a bare leading `N` all mean N packs: the count belongs in **both** `qty` and `scan_units` |
+| Totals | report the printed total as-is; never compute it from the lines, or §5.6's reconciliation checks nothing |
+| Uncertainty | prefer `null` over a fabricated value; `confidence: "low"` on any guess; drop an unrecoverable line rather than invent one |
+
+**Why the multibuy rule exists.** `G/VALLY MILK 2L  2 FOR $7.50` was parsed as
+`qty: 2, unit: "l"` — two litres, when four were carried home. The two numbers
+on that line answer different questions: the `2` in "2 FOR" counts bottles,
+the `2L` describes one bottle. The packaged-vs-weighed rule said `qty: 1,
+unit: "pack"` "regardless of what number appears in the product name", which
+was written about the *size* and read as flattening the *count*. It now says
+`qty: 1` means one pack per **scan**, not per line.
+
+**Changing a vocabulary changes this file too**, in the same commit (§4.7) —
+the closed lists are duplicated here by necessity, and a migration that moves
+without the prompt produces lines the database rejects after the user has
+already confirmed them.
+
+### 5.6 Post-checks *(code, not prompt)*
 Run before the review screen; each failure sets a flag rather than blocking:
 1. JSON schema/type/enum validation → one retry with the error message → then fall back to manual entry.
 2. Sum check: `|Σ items + discounts − total| ≤ 5 cents` → else flag `sum_mismatch`.
@@ -498,7 +538,7 @@ a `sum_mismatch`, it's the expected shape of a receipt the model correctly
 declined to itemize (§5.1). Checks 1, 4–6 don't apply to an empty item list
 either way, so nothing special is needed for them.
 
-### 5.6 Review screen (the trust gate)
+### 5.7 Review screen (the trust gate)
 - High-confidence rows pre-checked; `confidence='low'` rows highlighted and focused first.
 - Inline editing of name, category, qty, price; original `raw_text` shown as secondary text.
 - Any edit sets `user_corrected = 1` — the corpus for prompt improvement.
@@ -508,7 +548,7 @@ either way, so nothing special is needed for them.
   (turning it into a normal itemized bill is then no different from manual entry).
 - **Nothing is written to the database before explicit confirmation.**
 
-### 5.7 Acceptance criteria
+### 5.8 Acceptance criteria
 - 10-item receipt: capture → review screen in **≤ 6 s** on the mid-tier Android device and on the oldest supported iPhone.
 - Fixture corpus: ≥ 90% of line items correct without edits; **100%** of receipts either parse or fall back cleanly to manual entry (no crash, no silent partial save).
 - All three capture paths (scanner, plain camera, gallery) reach the review screen successfully on both platforms.
@@ -520,7 +560,7 @@ same receipt images the parser reads — the Python prototype used the
 latter; see its `CLAUDE.md`) — not an independent oracle. Two checks are
 genuinely non-AI and catch real transcription errors regardless of who read
 the receipt: GTIN check-digit validation on barcodes, and arithmetic
-reconciliation (`qty × rate ≈ price`, `Σ items ≈ total`, §4.9/§5.5). Neither
+reconciliation (`qty × rate ≈ price`, `Σ items ≈ total`, §4.9/§5.6). Neither
 helps on `category` (not printed on the receipt at all — pure
 interpretation, no anchor either way) or on a glyph the curator and the
 parser happen to misread the same way. Read the 90% figure as "agrees with
@@ -541,7 +581,7 @@ it). The one specific, repeatable weakness found: **discount-to-item
 attribution**, when a receipt prints two discounts near each other and the
 line-reconstruction step (§5.4) doesn't preserve which discount sat under
 which item — obvious from a photo, genuinely ambiguous once flattened to
-text. Worth a dedicated post-check (§5.5) or review-screen emphasis (§5.6)
+text. Worth a dedicated post-check (§5.6) or review-screen emphasis (§5.7)
 on any bill with more than one discount line, rather than trusting the
 model to always disambiguate it from text alone.
 
@@ -704,7 +744,7 @@ v1 has **no background work**. When reminders arrive in v2, use **schedule-ahead
 | Layer | Tool | Coverage |
 |---|---|---|
 | Unit | Jest | Query compiler & validator, line reconstruction, rotation/geometry maths, date parsing, GTIN check digit, sum checks, category rules, migrations |
-| Fixtures | Jest snapshots | **Receipt corpus**: saved OCR text + expected JSON, including the Warehouse case (barcodes, two-line items), New World case (weighed item, GST-exclusive SUB TOTAL trap), and a restaurant-bill case (§5.1) covering the itemless path; grows with every reported mis-parse. See §5.7 for what "expected" is actually checked against |
+| Fixtures | Jest snapshots | **Receipt corpus**: saved OCR text + expected JSON, including the Warehouse case (barcodes, two-line items), New World case (weighed item, GST-exclusive SUB TOTAL trap), and a restaurant-bill case (§5.1) covering the itemless path; grows with every reported mis-parse. See §5.8 for what "expected" is actually checked against |
 | Adversarial | Jest | Malformed specs, unknown enums, oversized limits, injection-shaped strings, empty results — all rejected or handled without touching SQL |
 | Integration | Jest + in-memory SQLite | Repository ↔ DB, transaction rollback on failed receipt write |
 | E2E | Maestro | capture→review→save · ask→chart · edit-with-confirmation · permission denied · airplane mode. **Run the same flows on both platforms** |
