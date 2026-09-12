@@ -52,7 +52,7 @@
     "start": "expo start",
     "check:gradle": "node ./scripts/check-gradle-wrapper.js",
     "preandroid": "npm run check:gradle",
-    "android": "node ./scripts/with-jdk17.js expo run:android",
+    "android": "DEVICE=$(node ./scripts/android-device.js) && node ./scripts/with-jdk17.js expo run:android --device \"$DEVICE\"",
     "ios": "expo run:ios",
     "prebuild": "expo prebuild --clean",
     "postprebuild": "node ./scripts/pin-android-studio-jdk.js && node ./scripts/write-local-properties.js",
@@ -61,7 +61,8 @@
     "test": "jest --selectProjects node && jest --selectProjects ui",
     "test:node": "jest --selectProjects node",
     "test:ui": "jest --selectProjects ui",
-    "prompt:build": "node ./scripts/build-prompt.js"
+    "prompt:build": "node ./scripts/build-prompt.js",
+    "android:device": "node ./scripts/android-device.js"
   },
   "private": true
 }
