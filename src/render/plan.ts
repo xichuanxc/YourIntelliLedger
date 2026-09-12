@@ -109,20 +109,30 @@ export function planRender(
     cents: toCents(value),
   }));
 
+  /**
+   * One value is a headline, whatever the model asked for.
+   *
+   * A one-bar bar chart and a one-slice donut are both charts of nothing: the
+   * axis, the baseline and the legend all exist to support a comparison that
+   * is not being made. So any form that comes down to a single number is a
+   * stat tile, and §14.7's `stat` is simply the case where the model already
+   * knew that.
+   */
+  if (points.length === 1) {
+    return {
+      kind: 'stat',
+      title: spec.title,
+      label: series.label ?? spec.x?.label ?? points[0].label,
+      valueCents: money ? points[0].cents : null,
+      raw: points[0].value,
+    };
+  }
+
   if (spec.type === 'stat') {
     // §14.7: "`stat` requires a single numeric value". More than one is not a
     // headline, and picking the first would assert a number the model never
     // meant to single out — so it is drawn as the series it actually is.
-    if (points.length !== 1) {
-      return { kind: 'bars', title: spec.title, axisLabel: spec.x?.label, bars: points, money };
-    }
-    return {
-      kind: 'stat',
-      title: spec.title,
-      label: series.label ?? spec.x?.label ?? '',
-      valueCents: money ? points[0].cents : null,
-      raw: points[0].value,
-    };
+    return { kind: 'bars', title: spec.title, axisLabel: spec.x?.label, bars: points, money };
   }
 
   if (spec.type === 'donut') {
@@ -147,12 +157,9 @@ export function planRender(
     };
   }
 
+  // A single point was already turned into a stat above, so anything reaching
+  // here has at least two and is a real trend.
   if (spec.type === 'line') {
-    // One point is not a trend. Drawing it as a bar says the same thing
-    // without implying a direction.
-    if (points.length < 2) {
-      return { kind: 'bars', title: spec.title, axisLabel: spec.x?.label, bars: points, money };
-    }
     return { kind: 'line', title: spec.title, axisLabel: spec.x?.label, points, money };
   }
 

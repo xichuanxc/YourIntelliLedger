@@ -98,10 +98,14 @@ describe('a line', () => {
     ).toMatchObject({ kind: 'line' });
   });
 
-  /** One point is not a trend; a bar says the same without implying direction. */
-  it('becomes a bar for a single point', () => {
+  /**
+   * Not a bar either. A one-bar chart is a chart of nothing — the axis, the
+   * baseline and the legend all support a comparison nobody is making — so a
+   * lone value is a headline whatever form was asked for.
+   */
+  it('becomes a headline for a single point', () => {
     expect(planRender({ type: 'line', series: money([5]) }, context)).toMatchObject({
-      kind: 'bars',
+      kind: 'stat',
     });
   });
 });
@@ -123,11 +127,12 @@ describe('axis labels the model got wrong', () => {
 
   it('ignores labels beyond the values, rather than inventing bars', () => {
     const plan = planRender(
-      { type: 'bar', x: { values: ['Jun', 'Jul', 'Aug'] }, series: money([1]) },
+      { type: 'bar', x: { values: ['Jun', 'Jul', 'Aug'] }, series: money([1, 2]) },
       context
     );
     if (plan.kind !== 'bars') throw new Error('expected bars');
-    expect(plan.bars).toHaveLength(1);
+    expect(plan.bars).toHaveLength(2);
+    expect(plan.bars.map((bar) => bar.label)).toEqual(['Jun', 'Jul']);
   });
 });
 
@@ -193,16 +198,55 @@ describe('a table', () => {
   });
 });
 
+/** Two values throughout: a single one is a headline, which has no chart to flag. */
 describe('deciding what is an amount', () => {
   it.each(['NZD', 'nzd', 'AUD', 'USD'])('treats %s as money', (label) => {
-    expect(planRender({ type: 'bar', series: [{ label, values: [1] }] }, context)).toMatchObject({
-      money: true,
-    });
+    expect(
+      planRender({ type: 'bar', series: [{ label, values: [1, 2] }] }, context)
+    ).toMatchObject({ money: true });
   });
 
   it.each(['Bills', 'Items', 'Count', undefined])('treats %s as a count', (label) => {
-    expect(planRender({ type: 'bar', series: [{ label, values: [1] }] }, context)).toMatchObject({
-      money: false,
+    expect(
+      planRender({ type: 'bar', series: [{ label, values: [1, 2] }] }, context)
+    ).toMatchObject({ money: false });
+  });
+
+  /** A headline says it in its own way: cents when money, raw when a count. */
+  it('formats a lone amount without needing the flag', () => {
+    expect(planRender({ type: 'bar', series: money([12.5]) }, context)).toMatchObject({
+      kind: 'stat',
+      valueCents: 1250,
+    });
+    expect(
+      planRender({ type: 'bar', series: [{ label: 'Bills', values: [7] }] }, context)
+    ).toMatchObject({ kind: 'stat', valueCents: null, raw: 7 });
+  });
+});
+
+/**
+ * A single value is a stat tile, never a one-bar chart or a one-slice ring —
+ * whichever form the model proposed.
+ */
+describe('one value is a headline, whatever was asked for', () => {
+  it.each(['bar', 'line', 'donut', 'stat'] as const)('turns a lone %s into a stat', (type) => {
+    expect(planRender({ type, series: [{ label: 'NZD', values: [12.5] }] }, context)).toMatchObject(
+      { kind: 'stat', valueCents: 1250 }
+    );
+  });
+
+  it('names the headline from the axis when the series is unlabelled', () => {
+    expect(
+      planRender(
+        { type: 'bar', x: { values: ['Countdown'] }, series: [{ values: [3] }] },
+        context
+      )
+    ).toMatchObject({ kind: 'stat', label: 'Countdown', valueCents: null, raw: 3 });
+  });
+
+  it('still charts two values', () => {
+    expect(planRender({ type: 'bar', series: money([1, 2]) }, context)).toMatchObject({
+      kind: 'bars',
     });
   });
 });
