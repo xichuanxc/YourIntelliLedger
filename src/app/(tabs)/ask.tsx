@@ -42,15 +42,25 @@ import { useAskStore, type AskMessage } from '@/ui/stores/ask-store';
 import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 
 /**
- * Whether the keyboard is covering the bottom of the screen.
+ * How much of the bottom of the screen the keyboard is covering, in points.
  *
- * Needed because two things want that space and only one of them is there at a
- * time: iOS's translucent tab bar, and the keyboard that covers it. Padding
- * for both at once leaves the composer floating a tab bar's height above the
- * keyboard.
+ * Two separate needs, hence a height rather than a boolean.
+ *
+ * On **iOS** only the fact matters: `KeyboardAvoidingView` moves the composer,
+ * and the height is used to decide whether to keep padding for the translucent
+ * tab bar — both want that space and only one of them is there at a time, so
+ * padding for both leaves the composer floating a tab bar above the keyboard.
+ *
+ * On **Android** the height is the whole fix. The manifest asks for
+ * `adjustResize`, which would normally lift the composer, but
+ * `edgeToEdgeEnabled=true` (android/gradle.properties) means the window no
+ * longer resizes when the keyboard appears — so nothing moves and the text box
+ * and Send button sit underneath it. `KeyboardAvoidingView` cannot help here
+ * either: its Android behaviour is a no-op. The inset has to be applied by
+ * hand.
  */
-function useKeyboardShown(): boolean {
-  const [shown, setShown] = useState(false);
+function useKeyboardInset(): number {
+  const [height, setHeight] = useState(0);
 
   useEffect(() => {
     // `will` events on iOS so the padding changes with the animation rather
@@ -58,21 +68,27 @@ function useKeyboardShown(): boolean {
     const show = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hide = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    const shownSub = Keyboard.addListener(show, () => setShown(true));
-    const hiddenSub = Keyboard.addListener(hide, () => setShown(false));
+    const shownSub = Keyboard.addListener(show, (event) =>
+      setHeight(event.endCoordinates?.height ?? 0)
+    );
+    const hiddenSub = Keyboard.addListener(hide, () => setHeight(0));
     return () => {
       shownSub.remove();
       hiddenSub.remove();
     };
   }, []);
 
-  return shown;
+  return height;
 }
 
 export default function AskScreen() {
   const theme = useTheme();
   const tabBarInset = useTabBarInset();
-  const keyboardShown = useKeyboardShown();
+  const keyboardHeight = useKeyboardInset();
+  const keyboardShown = keyboardHeight > 0;
+  // Android only: iOS's `KeyboardAvoidingView` already moves the composer, and
+  // adding the height there would lift it by the keyboard twice over.
+  const androidKeyboardInset = Platform.OS === 'android' ? keyboardHeight : 0;
   const { messages, thinking, streaming, send } = useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
@@ -101,7 +117,8 @@ export default function AskScreen() {
       </View>
 
       <KeyboardAvoidingView
-        style={styles.flex}
+        testID="ask-keyboard-avoider"
+        style={[styles.flex, { paddingBottom: androidKeyboardInset }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {messages.length === 0 ? (
           /*

@@ -8,8 +8,8 @@
  * action). The loop behind it has its own suite.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Keyboard } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import AskScreen from '@/app/(tabs)/ask';
@@ -252,5 +252,84 @@ describe('an answer arriving', () => {
 
     expect(screen.queryByLabelText('Answer, still arriving')).toBeNull();
     expect(screen.queryByLabelText('Thinking')).toBeNull();
+  });
+});
+
+/**
+ * Android-only, and the `ui` project runs the `jest-expo/android` preset, so
+ * this is the platform under test.
+ *
+ * The manifest asks for `adjustResize`, which would normally lift the
+ * composer, but `edgeToEdgeEnabled=true` stops the window resizing when the
+ * keyboard appears — and `KeyboardAvoidingView` is a no-op on Android. Without
+ * an inset applied by hand, the text box and Send button sit underneath the
+ * keyboard with no way to type or send.
+ */
+describe('making room for the Android keyboard', () => {
+  /** Captures the handlers the screen registers, so they can be fired. */
+  function captureKeyboardHandlers() {
+    const handlers = new Map<string, (event: unknown) => void>();
+    jest
+      .spyOn(Keyboard, 'addListener')
+      .mockImplementation((event: string, handler: (payload: never) => void) => {
+        handlers.set(event, handler as (event: unknown) => void);
+        return { remove: () => handlers.delete(event) } as never;
+      });
+    return handlers;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  const paddingOf = () =>
+    StyleSheet.flatten(screen.getByTestId('ask-keyboard-avoider').props.style).paddingBottom;
+
+  it('reserves no space while the keyboard is down', async () => {
+    captureKeyboardHandlers();
+    withState([]);
+    await draw(<AskScreen />);
+
+    expect(paddingOf()).toBe(0);
+  });
+
+  it('lifts the composer by the keyboard height', async () => {
+    const handlers = captureKeyboardHandlers();
+    withState([]);
+    await draw(<AskScreen />);
+
+    await act(async () => {
+      handlers.get('keyboardDidShow')?.({ endCoordinates: { height: 312 } });
+    });
+
+    expect(paddingOf()).toBe(312);
+  });
+
+  it('gives the space back when the keyboard goes away', async () => {
+    const handlers = captureKeyboardHandlers();
+    withState([]);
+    await draw(<AskScreen />);
+
+    await act(async () => {
+      handlers.get('keyboardDidShow')?.({ endCoordinates: { height: 312 } });
+    });
+    await act(async () => {
+      handlers.get('keyboardDidHide')?.({});
+    });
+
+    expect(paddingOf()).toBe(0);
+  });
+
+  /** A malformed event must not collapse the layout to NaN. */
+  it('treats a height-less event as no keyboard', async () => {
+    const handlers = captureKeyboardHandlers();
+    withState([]);
+    await draw(<AskScreen />);
+
+    await act(async () => {
+      handlers.get('keyboardDidShow')?.({});
+    });
+
+    expect(paddingOf()).toBe(0);
   });
 });
