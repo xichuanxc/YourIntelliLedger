@@ -41,6 +41,7 @@ import {
 } from '@/data/questionsRepo';
 import { getSaveAskHistory } from '@/data/prefs';
 import { logQuery } from '@/data/telemetryRepo';
+import { tryFastpath } from '@/fastpath';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 
 export interface AskMessage {
@@ -187,6 +188,80 @@ export const useAskStore = create<AskState>((set, get) => ({
       } catch {
         // Never at the cost of the answer being asked for.
       }
+    }
+
+    /**
+     * §6.6, "matched before any network call".
+     *
+     * A hit means no model runs, nothing leaves the device, and the answer is
+     * on screen in milliseconds — which is also why this sits above the
+     * catalog and range reads rather than below them. A miss is the common
+     * case and costs one pass of a few regexes.
+     */
+    const fast = await tryFastpath(question, { db, today: todayLocalDate() });
+    if (fast) {
+      set((state) => ({
+        messages: [
+          ...state.messages,
+          {
+            id: nextId(),
+            role: 'assistant',
+            text: fast.envelope.text,
+            envelope: fast.envelope,
+            references: fast.references,
+            currency: fast.currency,
+          },
+        ],
+        // The model did not see this turn, but the next one should: without
+        // it a follow-up — "and last month?" — arrives with no idea what was
+        // just asked or answered.
+        history: [
+          ...state.history,
+          { role: 'user', content: question },
+          { role: 'assistant', content: fast.envelope.text },
+        ],
+        thinking: false,
+        streaming: '',
+      }));
+
+      if (keep) {
+        try {
+          await appendMessage(db, {
+            role: 'assistant',
+            text: fast.envelope.text,
+            envelope: fast.envelope,
+            references: fast.references,
+            currency: fast.currency,
+          });
+        } catch {
+          // As on the agent path: the answer is already on screen.
+        }
+      }
+
+      try {
+        // §15.3: `route` is how the fastpath share becomes a number, and
+        // §6.8's p95 budget is checked against `latencyMs` from real use.
+        // No model ran, so there is no alias and there are no tokens. The
+        // pattern name is a tool name in all but spelling — never the
+        // question itself.
+        await logQuery(db, {
+          route: 'fastpath',
+          outcome: 'ok',
+          latencyMs: fast.latencyMs,
+          toolCalls: [fast.intent],
+        });
+      } catch {
+        // Telemetry never costs someone an answer.
+      }
+
+      try {
+        await recordQuestion(db, question);
+        set({ suggestions: await getFrequentQuestions(db, SUGGESTION_COUNT) });
+      } catch {
+        // Same rule as the agent path below.
+      }
+
+      return;
     }
 
     // Both are read per turn rather than cached in the store: a bill added in

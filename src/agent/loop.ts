@@ -200,9 +200,14 @@ export async function runAgentTurn(
     const { envelope } = parseEnvelope(summary.message.content ?? '');
     return finish(envelope.text === '' ? { text: GAVE_UP_TEXT } : envelope, 'fallback', 'loop_cap');
   } catch (error) {
-    // §6.1 puts the fastpath check here — "network error → fastpath if the
-    // pattern matches, else offline notice". The fastpaths are §6.6 and land
-    // in Week 8; until then a network failure takes the offline branch.
+    // §6.1 sketches a fastpath check here — "network error → fastpath if the
+    // pattern matches, else offline notice" — and it is deliberately *not*
+    // here. §6.6 requires the same check "before any network call", so
+    // `ask-store` runs `tryFastpath` ahead of this function. By the time an
+    // error reaches this block the fastpaths have already declined this
+    // question, and asking them the same thing again, against the same
+    // database, cannot answer it. A second call site would look like it
+    // honoured §6.1 while being unreachable in every case that matters.
     //
     // Three outcomes, not one. The first version of this said "could not
     // reach the assistant" for everything, which made an unreachable network

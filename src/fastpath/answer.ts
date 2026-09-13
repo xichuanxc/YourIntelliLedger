@@ -50,6 +50,13 @@ export interface FastpathAnswer {
   envelope: AnswerEnvelope;
   /** Only list-shaped answers vouch for links — see `execute.ts`. */
   references: BillReference[];
+  /**
+   * The currency the amounts were computed in — set only when there is a
+   * chart. `planRender` needs it to tell money from counts, and the fastpath
+   * skips the §6.3 catalog that normally supplies it. A text-only answer has
+   * already formatted its own money and needs nothing.
+   */
+  currency?: string;
 }
 
 /** How many merchants a "where do I shop" chart can show before it blurs. */
@@ -261,6 +268,7 @@ async function answerMonthVsMonth({ db, today }: FastpathContext): Promise<Fastp
       ),
     },
     references: [],
+    currency: summary.currency,
   };
 }
 
@@ -298,6 +306,7 @@ async function answerTopCategory(
       ),
     },
     references: [],
+    currency: summary.currency,
   };
 }
 
@@ -329,6 +338,7 @@ async function answerTopMerchant(
       ),
     },
     references: [],
+    currency: summary.currency,
   };
 }
 
