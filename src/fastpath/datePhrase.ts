@@ -65,9 +65,10 @@ const NUMBER_WORDS: Record<string, number> = {
   twelve: 12,
 };
 
-const COUNT = String.raw`(\d{1,2}|${Object.keys(NUMBER_WORDS).join('|')})`;
+/** Shared with the intent matcher, so "last three bills" counts the same way. */
+export const COUNT_PATTERN = String.raw`(\d{1,2}|${Object.keys(NUMBER_WORDS).join('|')})`;
 
-function countOf(token: string): number {
+export function parseCount(token: string): number {
   return NUMBER_WORDS[token] ?? Number(token);
 }
 
@@ -113,24 +114,24 @@ interface Rule {
  */
 const RULES: Rule[] = [
   {
-    pattern: new RegExp(String.raw`\blast\s+${COUNT}\s+months?\b`),
+    pattern: new RegExp(String.raw`\blast\s+${COUNT_PATTERN}\s+months?\b`),
     resolve: (match, today) => ({
-      period: periodOfLastMonths(countOf(match[1]), today),
-      label: `the last ${countOf(match[1])} months`,
+      period: periodOfLastMonths(parseCount(match[1]), today),
+      label: `the last ${parseCount(match[1])} months`,
     }),
   },
   {
-    pattern: new RegExp(String.raw`\blast\s+${COUNT}\s+weeks?\b`),
+    pattern: new RegExp(String.raw`\blast\s+${COUNT_PATTERN}\s+weeks?\b`),
     resolve: (match, today) => ({
-      period: periodOfLastWeeks(countOf(match[1]), today),
-      label: `the last ${countOf(match[1])} weeks`,
+      period: periodOfLastWeeks(parseCount(match[1]), today),
+      label: `the last ${parseCount(match[1])} weeks`,
     }),
   },
   {
-    pattern: new RegExp(String.raw`\blast\s+${COUNT}\s+days?\b`),
+    pattern: new RegExp(String.raw`\blast\s+${COUNT_PATTERN}\s+days?\b`),
     resolve: (match, today) => ({
-      period: { from: addDays(today, -(countOf(match[1]) - 1)), to: today },
-      label: `the last ${countOf(match[1])} days`,
+      period: { from: addDays(today, -(parseCount(match[1]) - 1)), to: today },
+      label: `the last ${parseCount(match[1])} days`,
     }),
   },
   {
