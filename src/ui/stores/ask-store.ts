@@ -29,6 +29,7 @@ import type { BillReference } from '@/agent/execute';
 import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
+import { recordQuestion } from '@/data/questionsRepo';
 import { logQuery } from '@/data/telemetryRepo';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 
@@ -156,6 +157,19 @@ export const useAskStore = create<AskState>((set, get) => ({
       // Telemetry is a diagnostic convenience. A user who has just been given
       // an answer should not see it fail because a counter could not be
       // written — the same rule `capture-store` follows for parses.
+    }
+
+    // Remember the question so the Ask screen can offer it back (§6, Week 8).
+    // Only when it was answered: suggesting a question the app could not
+    // answer is offering a known disappointment. Kept out of `query_log`,
+    // which §15.3 keeps free of question text — see `questionsRepo`.
+    if (turn.log.outcome !== 'error') {
+      try {
+        await recordQuestion(db, question);
+      } catch {
+        // Same rule as above: a suggestion list is a convenience and must
+        // never cost someone the answer they just received.
+      }
     }
   },
 }));

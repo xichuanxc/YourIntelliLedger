@@ -40,7 +40,15 @@ describe('migrate (spec §4.12)', () => {
       applied: MIGRATIONS.map((migration) => migration.version),
     });
     expect(await userVersion(db)).toBe(SCHEMA_VERSION);
-    expect(await tableNames(db)).toEqual(['bill_items', 'bills', 'query_log', 'receipt_scans']);
+    // Listed rather than derived: a new table is a deliberate act, and this
+    // assertion is where an accidental one gets noticed.
+    expect(await tableNames(db)).toEqual([
+      'asked_questions',
+      'bill_items',
+      'bills',
+      'query_log',
+      'receipt_scans',
+    ]);
   });
 
   it('is idempotent — a second run applies nothing', async () => {
