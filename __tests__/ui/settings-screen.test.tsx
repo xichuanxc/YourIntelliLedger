@@ -63,6 +63,9 @@ jest.mock('@/data/telemetryRepo', () => ({
   }),
 }));
 
+/** Mutable so a test can start from "already switched on". */
+const mockPrefs = { saveHistory: false };
+
 jest.mock('@/data/prefs', () => ({
   getBlockScreenshots: () => false,
   setBlockScreenshots: jest.fn(),
@@ -70,7 +73,14 @@ jest.mock('@/data/prefs', () => ({
   setMapPreviews: jest.fn(),
   getVisionParse: () => false,
   setVisionParse: jest.fn(),
+  getSaveAskHistory: () => mockPrefs.saveHistory,
+  setSaveAskHistory: jest.fn(),
 }));
+
+jest.mock('@/data/conversationRepo', () => ({ clearConversation: jest.fn() }));
+
+const { setSaveAskHistory } = jest.requireMock('@/data/prefs');
+const { clearConversation } = jest.requireMock('@/data/conversationRepo');
 
 jest.mock('@/data/screenPrivacy', () => ({
   applyScreenshotPolicy: async () => true,
@@ -113,6 +123,9 @@ beforeEach(() => {
   store.receipt = 'AIzaRECEIPTkey0001';
   store.ask = null;
   store.model = null;
+  mockPrefs.saveHistory = false;
+  setSaveAskHistory.mockClear();
+  clearConversation.mockClear();
 });
 
 describe('sharing one key between receipts and Ask', () => {
@@ -221,5 +234,44 @@ describe('the receipts key', () => {
 
     await waitFor(() => expect(store.receipt).toBe('AIzaNEWreceipt2222'));
     expect(store.model).toBe('gemini-3.6-pro');
+  });
+});
+
+/**
+ * Keeping the Ask conversation (§6). Off by default because a transcript
+ * holds answers, and answers quote amounts — so the interesting behaviour is
+ * what happens when it is turned back off.
+ */
+describe('saving conversation records', () => {
+  const SAVE = 'Save conversation records';
+
+  it('is off until it is switched on', async () => {
+    await draw();
+
+    await fireEvent(screen.getByLabelText(SAVE), 'valueChange', true);
+
+    expect(setSaveAskHistory).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps what is stored while it stays on', async () => {
+    await draw();
+
+    await fireEvent(screen.getByLabelText(SAVE), 'valueChange', true);
+
+    expect(clearConversation).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A switch reading "off" while a record of every answer survives would be
+   * the kind of quiet privacy failure a user cannot see.
+   */
+  it('deletes the saved conversation when switched off', async () => {
+    mockPrefs.saveHistory = true;
+    await draw();
+
+    await fireEvent(screen.getByLabelText(SAVE), 'valueChange', false);
+
+    expect(setSaveAskHistory).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(clearConversation).toHaveBeenCalled());
   });
 });

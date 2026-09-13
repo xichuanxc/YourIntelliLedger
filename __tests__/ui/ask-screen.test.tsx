@@ -9,7 +9,7 @@
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { Keyboard, StyleSheet } from 'react-native';
+import { Alert, Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import AskScreen from '@/app/(tabs)/ask';
@@ -39,6 +39,8 @@ const draw = (ui: React.ReactElement) =>
 const mockedStore = useAskStore as unknown as jest.Mock;
 const send = jest.fn();
 const loadSuggestions = jest.fn().mockResolvedValue(undefined);
+const restore = jest.fn().mockResolvedValue(undefined);
+const clearConversation = jest.fn().mockResolvedValue(undefined);
 
 function withState(
   messages: AskMessage[],
@@ -53,6 +55,8 @@ function withState(
     suggestions,
     send,
     loadSuggestions,
+    restore,
+    clearConversation,
     history: [],
     clear: jest.fn(),
   });
@@ -64,6 +68,8 @@ beforeEach(() => {
   send.mockClear();
   push.mockClear();
   loadSuggestions.mockClear();
+  restore.mockClear();
+  clearConversation.mockClear();
 });
 
 describe('an empty conversation', () => {
@@ -122,6 +128,85 @@ describe('suggesting questions the user has asked before', () => {
     await draw(<AskScreen />);
 
     expect(screen.queryByLabelText(/^Ask again/)).toBeNull();
+  });
+});
+
+/**
+ * Clearing the conversation (§6, Week 8).
+ *
+ * Destructive, so it confirms first — and "confirms" has to mean the work
+ * only happens on the destructive choice, which is the half of a dialog that
+ * is easy to wire backwards.
+ */
+describe('the conversation menu', () => {
+  const asked: AskMessage[] = [
+    { id: 'a', role: 'user', text: 'how much?' },
+    { id: 'b', role: 'assistant', text: 'You spent $12.' },
+  ];
+
+  /** Runs the button with the given label out of the last Alert shown. */
+  const choose = async (alert: jest.SpyInstance, label: string) => {
+    const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    await act(async () => {
+      buttons.find((button) => button.text === label)?.onPress?.();
+    });
+  };
+
+  it('offers nothing to clear on an empty conversation', async () => {
+    withState([]);
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText('Conversation options')).toBeNull();
+  });
+
+  it('appears once there is a conversation', async () => {
+    withState(asked);
+    await draw(<AskScreen />);
+    expect(screen.getByLabelText('Conversation options')).toBeTruthy();
+  });
+
+  it('asks before clearing rather than clearing on the tap', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(asked);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Conversation options'));
+
+    expect(alert).toHaveBeenCalled();
+    expect(clearConversation).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('clears when the destructive choice is taken', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(asked);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Conversation options'));
+    await choose(alert, 'Clear');
+
+    expect(clearConversation).toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('leaves the conversation alone on Cancel', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(asked);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Conversation options'));
+    await choose(alert, 'Cancel');
+
+    expect(clearConversation).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+});
+
+/** A conversation saved on a previous launch is read back when the screen opens. */
+describe('restoring a saved conversation', () => {
+  it('asks the store to restore when the screen appears', async () => {
+    withState([]);
+    await draw(<AskScreen />);
+    expect(restore).toHaveBeenCalled();
   });
 });
 

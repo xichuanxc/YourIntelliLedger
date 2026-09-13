@@ -26,6 +26,8 @@ const KEYS = {
   mapPreviews: 'privacy.mapPreviews',
   /** Send the receipt photograph to the model, not only the OCR text (§5.1). */
   visionParse: 'parse.vision',
+  /** Keep the Ask conversation across launches (§6) — see `conversationRepo`. */
+  saveAskHistory: 'ask.saveHistory',
 } as const;
 
 export function getBlockScreenshots(): boolean {
@@ -61,4 +63,18 @@ export function getVisionParse(): boolean {
 
 export function setVisionParse(value: boolean): void {
   mmkv().set(KEYS.visionParse, value);
+}
+
+export function getSaveAskHistory(): boolean {
+  // Off by default, and for a stronger reason than the other two. A saved
+  // conversation is a transcript: the questions *and* the answers, and an
+  // answer quotes amounts. §8.2's posture is that nothing outlives the
+  // session unless the user asks for it, and the app is fully usable without
+  // this — a conversation still survives switching tabs, it just does not
+  // survive closing the app.
+  return mmkv().getBoolean(KEYS.saveAskHistory) ?? false;
+}
+
+export function setSaveAskHistory(value: boolean): void {
+  mmkv().set(KEYS.saveAskHistory, value);
 }

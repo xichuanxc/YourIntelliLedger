@@ -22,6 +22,7 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
@@ -91,7 +92,8 @@ export default function AskScreen() {
   // Android only: iOS's `KeyboardAvoidingView` already moves the composer, and
   // adding the height there would lift it by the keyboard twice over.
   const androidKeyboardInset = Platform.OS === 'android' ? keyboardHeight : 0;
-  const { messages, thinking, streaming, suggestions, send, loadSuggestions } = useAskStore();
+  const { messages, thinking, streaming, suggestions, send, loadSuggestions, restore, clearConversation } =
+    useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
 
@@ -114,6 +116,27 @@ export default function AskScreen() {
     void loadSuggestions();
   }, [loadSuggestions]);
 
+  // A conversation saved on a previous launch, if the user asked for that.
+  useEffect(() => {
+    void restore();
+  }, [restore]);
+
+  /**
+   * Destructive and not obviously undoable, so it asks first — the same
+   * pattern the development Clear all data button uses. A menu of one item
+   * would be a sheet to dismiss on the way to the only thing in it.
+   */
+  const confirmClear = () => {
+    Alert.alert(
+      'Clear this conversation?',
+      'Removes the questions and answers on this screen, and the saved copy if you are keeping one. Your bills are not affected.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: () => void clearConversation() },
+      ]
+    );
+  };
+
   const submit = () => {
     const text = draft.trim();
     if (text === '' || thinking) return;
@@ -127,6 +150,19 @@ export default function AskScreen() {
     <Screen>
       <View style={styles.header}>
         <ThemedText type="title">Ask</ThemedText>
+        {/* Nothing to clear on an empty screen, so nothing to press. */}
+        {messages.length > 0 && (
+          <Pressable
+            onPress={confirmClear}
+            accessibilityRole="button"
+            accessibilityLabel="Conversation options"
+            hitSlop={Spacing.two}
+            style={({ pressed }) => [styles.more, { opacity: pressed ? 0.6 : 1 }]}>
+            <ThemedText type="title" themeColor="textSecondary">
+              ⋯
+            </ThemedText>
+          </Pressable>
+        )}
       </View>
 
       <KeyboardAvoidingView
@@ -360,7 +396,14 @@ function Bubble({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  header: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
+  header: {
+    paddingHorizontal: Spacing.four,
+    paddingBottom: Spacing.two,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  more: { minWidth: MinTouchTarget, minHeight: MinTouchTarget, alignItems: 'flex-end', justifyContent: 'center' },
   listContent: { padding: Spacing.four, gap: Spacing.three },
   link: { textDecorationLine: 'underline' },
   bubble: {

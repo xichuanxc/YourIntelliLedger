@@ -28,13 +28,16 @@ import {
   setByokKey,
   setByokModel,
 } from '@/agent/byokKey';
+import { clearConversation } from '@/data/conversationRepo';
 import { getDb } from '@/data/db';
 import {
   getBlockScreenshots,
   getMapPreviews,
   setBlockScreenshots,
   getVisionParse,
+  getSaveAskHistory,
   setMapPreviews as setMapPreviewsPref,
+  setSaveAskHistory as setSaveAskHistoryPref,
   setVisionParse as setVisionParsePref,
 } from '@/data/prefs';
 import { applyScreenshotPolicy, SCREENSHOT_BLOCKING_SUPPORTED } from '@/data/screenPrivacy';
@@ -67,6 +70,7 @@ export default function SettingsScreen() {
   const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
   const [mapPreviews, setMapPreviews] = useState(true);
   const [visionParse, setVisionParse] = useState(false);
+  const [saveHistory, setSaveHistory] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -79,6 +83,7 @@ export default function SettingsScreen() {
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
       setVisionParse(getVisionParse());
+      setSaveHistory(getSaveAskHistory());
     })();
   }, []);
 
@@ -147,6 +152,26 @@ export default function SettingsScreen() {
       setAskStatus('Saved. Ask is using its own key.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  /**
+   * Turning it off deletes what was kept.
+   *
+   * The same rule as the Ask key above: data that nothing reads and nothing
+   * shows should not sit in storage. Leaving the transcript behind would mean
+   * a switch that says "off" while a record of every answer survives.
+   */
+  const toggleSaveHistory = async (value: boolean) => {
+    setSaveHistory(value);
+    setSaveAskHistoryPref(value);
+    if (value) return;
+
+    try {
+      await clearConversation(await getDb());
+    } catch {
+      // The preference is what governs future writes; a failed delete is
+      // worth not crashing Settings over.
     }
   };
 
@@ -309,6 +334,23 @@ export default function SettingsScreen() {
               {askStatus}
             </ThemedText>
           )}
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Save conversation records</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Keeps your questions and their answers on this device so they are still
+                here next time you open the app. Off by default, because an answer
+                quotes amounts. Nothing is uploaded either way, and turning this off
+                deletes what was kept.
+              </ThemedText>
+            </View>
+            <Switch
+              value={saveHistory}
+              onValueChange={toggleSaveHistory}
+              accessibilityLabel="Save conversation records"
+            />
+          </View>
         </Section>
 
         <Section title={usage ? `Usage — ${formatMonth(usage.month)}` : 'Usage'}>

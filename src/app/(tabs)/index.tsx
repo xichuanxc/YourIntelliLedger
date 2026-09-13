@@ -16,6 +16,7 @@ import { formatDate, formatMonth } from '@/data/dates';
 import { getDb } from '@/data/db';
 import { deleteAllBills } from '@/data/ledgerRepo';
 import { formatMoney } from '@/data/money';
+import { clearConversation } from '@/data/conversationRepo';
 import { clearQuestions } from '@/data/questionsRepo';
 import { clearQueryLog } from '@/data/telemetryRepo';
 import { clearGeocodeCache } from '@/maps/geocodeCache';
@@ -271,7 +272,7 @@ function DevClearButton() {
   const run = () => {
     Alert.alert(
       'Clear all data?',
-      'Deletes every bill, its items and captured text, the cached map coordinates, this month’s usage log, and the questions you have asked. Your API key and settings are kept. This cannot be undone.',
+      'Deletes every bill, its items and captured text, the cached map coordinates, this month’s usage log, the questions you have asked and any saved conversation. Your API key and settings are kept. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -287,6 +288,8 @@ function DevClearButton() {
               // a record of what someone asked is a privacy failure they
               // cannot see.
               await clearQuestions(db);
+              // And the saved conversation, for the same reason.
+              await clearConversation(db);
               // Coordinates are derived from bill addresses, so they are bill
               // data — and a stale cached miss would outlive the bill that
               // produced it (see geocodeCache's version note).

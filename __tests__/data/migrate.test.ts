@@ -43,6 +43,7 @@ describe('migrate (spec §4.12)', () => {
     // Listed rather than derived: a new table is a deliberate act, and this
     // assertion is where an accidental one gets noticed.
     expect(await tableNames(db)).toEqual([
+      'ask_messages',
       'asked_questions',
       'bill_items',
       'bills',

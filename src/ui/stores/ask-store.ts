@@ -26,6 +26,11 @@ import { runAgentTurn } from '@/agent/loop';
 import type { ChatMessage } from '@/agent/messages';
 import type { AnswerEnvelope } from '@/agent/envelope';
 import type { BillReference } from '@/agent/execute';
+import {
+  appendMessage,
+  clearConversation as clearStoredConversation,
+  getConversation,
+} from '@/data/conversationRepo';
 import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
@@ -34,6 +39,7 @@ import {
   recordQuestion,
   type FrequentQuestion,
 } from '@/data/questionsRepo';
+import { getSaveAskHistory } from '@/data/prefs';
 import { logQuery } from '@/data/telemetryRepo';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 
@@ -85,6 +91,14 @@ interface AskState {
   streaming: string;
   send: (text: string) => Promise<void>;
   clear: () => void;
+  /**
+   * Reads back a conversation saved on a previous launch, when the user has
+   * asked for that (§6). A no-op otherwise, and never over the top of a
+   * conversation already in progress.
+   */
+  restore: () => Promise<void>;
+  /** Forgets the conversation on screen *and* any saved copy of it. */
+  clearConversation: () => Promise<void>;
 }
 
 /**
@@ -114,6 +128,44 @@ export const useAskStore = create<AskState>((set, get) => ({
 
   clear: () => set({ messages: [], history: [], thinking: false, streaming: '' }),
 
+  restore: async () => {
+    // Only what the user sees is restored, never `history`. Replaying old
+    // tool calls into a new prompt risks a wrong answer for a convenience
+    // nobody asked for, so a restored conversation is for reading: the next
+    // question starts a fresh thread.
+    if (!getSaveAskHistory() || get().messages.length > 0) return;
+
+    try {
+      const saved = await getConversation(await getDb());
+      if (saved.length === 0) return;
+
+      set({
+        messages: saved.map((row) => ({
+          id: `s${row.id}`,
+          role: row.role,
+          text: row.text,
+          envelope: (row.envelope as AskMessage['envelope']) ?? undefined,
+          references: (row.references as AskMessage['references']) ?? undefined,
+          currency: row.currency ?? undefined,
+        })),
+      });
+    } catch {
+      // A conversation that will not load is a lost convenience, not a
+      // reason to keep someone out of the screen.
+    }
+  },
+
+  clearConversation: async () => {
+    set({ messages: [], history: [], thinking: false, streaming: '' });
+    try {
+      await clearStoredConversation(await getDb());
+    } catch {
+      // The screen is already empty. Failing to delete rows that the next
+      // restore would read is worth reporting, but not worth an alert on top
+      // of an action that visibly succeeded.
+    }
+  },
+
   send: async (text: string) => {
     const question = text.trim();
     if (question === '' || get().thinking) return;
@@ -125,6 +177,17 @@ export const useAskStore = create<AskState>((set, get) => ({
     }));
 
     const db = await getDb();
+
+    // Saved only when asked for. `keep` is read once per turn rather than per
+    // write, so switching the preference mid-answer cannot store half a turn.
+    const keep = getSaveAskHistory();
+    if (keep) {
+      try {
+        await appendMessage(db, { role: 'user', text: question });
+      } catch {
+        // Never at the cost of the answer being asked for.
+      }
+    }
 
     // Both are read per turn rather than cached in the store: a bill added in
     // another tab between two questions must be visible to the second one, and
@@ -171,6 +234,20 @@ export const useAskStore = create<AskState>((set, get) => ({
       thinking: false,
       streaming: '',
     }));
+
+    if (keep) {
+      try {
+        await appendMessage(db, {
+          role: 'assistant',
+          text: answer,
+          envelope: turn.envelope,
+          references: turn.references,
+          currency: catalog.currency,
+        });
+      } catch {
+        // As above: the answer is already on screen.
+      }
+    }
 
     try {
       await logQuery(db, {
