@@ -8,31 +8,9 @@
  */
 
 import { render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
 
 import { AnswerView } from '@/render/answer-view';
 import type { RenderPlan } from '@/render/plan';
-
-/**
- * `react-native-gifted-charts` ships untranspiled ESM and the preset does not
- * transform it, so importing it here fails with `Unexpected token 'export'`.
- * Mocked rather than added to `transformIgnorePatterns`: the chart internals
- * are the library's concern, these tests are about this file's decisions, and
- * widening the transform would slow every UI run to exercise someone else's
- * SVG. The stubs render their identity so a chart's *presence* is still
- * assertable.
- */
-jest.mock('react-native-gifted-charts', () => {
-  const { Text: MockText } = require('react-native');
-  return {
-    BarChart: () => <MockText>bar-chart</MockText>,
-    LineChart: () => <MockText>line-chart</MockText>,
-    // `DonutBreakdown` draws its ring with this. Only the ring is stubbed —
-    // the legend beside it is the component's own code, and the legend is the
-    // part that carries identity when colour cannot.
-    PieChart: () => <MockText>pie-chart</MockText>,
-  };
-});
 
 const draw = (plan: RenderPlan) => render(<AnswerView plan={plan} currency="NZD" />);
 

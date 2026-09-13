@@ -42,11 +42,17 @@ export interface AskMessage {
    */
   references?: BillReference[];
   /**
-   * The answer's structured half (§14.7). Kept even though Week 7 renders
-   * none of it: Week 8's charts, chips and confirmation cards read from here,
-   * and dropping it now would mean re-running the turn to get it back.
+   * The answer's structured half (§14.7) — what §6.7's renderer draws.
    */
   envelope?: AnswerEnvelope;
+  /**
+   * The currency the answer's amounts were computed in.
+   *
+   * Stored per message rather than read live, so an answer keeps the currency
+   * it was actually about. A ledger whose dominant currency changes later
+   * must not silently reprint an old answer's dollars as euros.
+   */
+  currency?: string;
 }
 
 interface AskState {
@@ -127,6 +133,7 @@ export const useAskStore = create<AskState>((set, get) => ({
           text: answer,
           envelope: turn.envelope,
           references: turn.references,
+          currency: catalog.currency,
         },
       ],
       history: turn.history,

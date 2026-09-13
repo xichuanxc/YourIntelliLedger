@@ -61,8 +61,16 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const { width } = useWindowDimensions();
 
-  // The bubble is inset from both screen edges and from its own padding.
-  const chartWidth = Math.min(width, MaxContentWidth) - Spacing.four * 6;
+  /**
+   * A bound, not a measurement.
+   *
+   * These draw inside a chat bubble, which is capped at 85% of the list width
+   * and carries its own horizontal padding, on top of the list's. Measuring
+   * the container properly would mean an `onLayout` pass and a render with no
+   * chart in it; erring narrow costs a few points of width, while erring wide
+   * pushes the chart out of the bubble.
+   */
+  const chartWidth = Math.min(width, MaxContentWidth) * 0.85 - Spacing.four * 4;
 
   if (plan.kind === 'none') return null;
 

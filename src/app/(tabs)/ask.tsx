@@ -32,6 +32,8 @@ import {
   View,
 } from 'react-native';
 
+import { AnswerView } from '@/render/answer-view';
+import { planRender } from '@/render/plan';
 import { linkify } from '@/ui/linkify';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
@@ -277,6 +279,13 @@ function Bubble({
 
   const segments = mine ? null : linkify(message.text, message.references ?? []);
 
+  // §6.7 decides what may be drawn; an answer with no `render` block, or one
+  // that could not be drawn honestly, plans to nothing and shows the sentence
+  // alone. The streaming placeholder has no envelope and so lands here too.
+  const plan = mine
+    ? null
+    : planRender(message.envelope?.render, { currency: message.currency ?? 'NZD' });
+
   return (
     <View
       accessibilityLabel={accessibilityLabel}
@@ -308,6 +317,8 @@ function Bubble({
             )
           : message.text}
       </ThemedText>
+
+      {plan && <AnswerView plan={plan} currency={message.currency ?? 'NZD'} />}
     </View>
   );
 }
