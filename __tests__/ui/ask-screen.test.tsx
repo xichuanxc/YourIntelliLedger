@@ -210,6 +210,73 @@ describe('restoring a saved conversation', () => {
   });
 });
 
+/**
+ * Reaching for a question you already asked (§6, Week 8).
+ *
+ * It goes into the box rather than straight to the model, because the reason
+ * to reach for an old question is usually that the new one is nearly it.
+ */
+describe('reusing a question you sent', () => {
+  const conversation: AskMessage[] = [
+    { id: 'a', role: 'user', text: 'how much on groceries in June?' },
+    { id: 'b', role: 'assistant', text: 'You spent $214.30.' },
+  ];
+
+  const choose = async (alert: jest.SpyInstance, label: string) => {
+    const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    await act(async () => {
+      buttons.find((button) => button.text === label)?.onPress?.();
+    });
+  };
+
+  it('asks first rather than acting on the tap', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(conversation);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('how much on groceries in June?, use again'));
+
+    expect(alert).toHaveBeenCalled();
+    expect(screen.getByLabelText('Your question').props.value).toBe('');
+    alert.mockRestore();
+  });
+
+  it('copies it into the box, and does not send it', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(conversation);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('how much on groceries in June?, use again'));
+    await choose(alert, 'Copy to question box');
+
+    expect(screen.getByLabelText('Your question').props.value).toBe(
+      'how much on groceries in June?'
+    );
+    expect(send).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('leaves the box alone on Cancel', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    withState(conversation);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('how much on groceries in June?, use again'));
+    await choose(alert, 'Cancel');
+
+    expect(screen.getByLabelText('Your question').props.value).toBe('');
+    alert.mockRestore();
+  });
+
+  /** An answer is not a question; there is nothing to put back in the box. */
+  it('offers nothing on the assistant’s messages', async () => {
+    withState(conversation);
+    await draw(<AskScreen />);
+
+    expect(screen.queryByLabelText('You spent $214.30., use again')).toBeNull();
+  });
+});
+
 describe('asking', () => {
   it('sends the question and empties the box', async () => {
     withState([]);

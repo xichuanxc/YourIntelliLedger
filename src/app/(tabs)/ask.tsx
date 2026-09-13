@@ -96,6 +96,7 @@ export default function AskScreen() {
     useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
+  const input = useRef<TextInput>(null);
 
   // A new answer is at the bottom, and an answer nobody scrolls to is an
   // answer nobody read.
@@ -120,6 +121,30 @@ export default function AskScreen() {
   useEffect(() => {
     void restore();
   }, [restore]);
+
+  /**
+   * Offers a question you already asked back to the box.
+   *
+   * Into the box rather than straight to the model: the reason to reach for
+   * an old question is usually that the new one is *nearly* it — last month
+   * instead of this one, a different shop. Sending it unchanged would be the
+   * one thing you did not want, and the suggestion chips already cover asking
+   * something again verbatim.
+   */
+  const confirmReuse = (text: string) => {
+    Alert.alert('Use this question again?', text, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Copy to question box',
+        onPress: () => {
+          setDraft(text);
+          // Focused, so the keyboard is up and the edit can start straight
+          // away — the edit is the point.
+          input.current?.focus();
+        },
+      },
+    ]);
+  };
 
   /**
    * Destructive and not obviously undoable, so it asks first — the same
@@ -238,7 +263,7 @@ export default function AskScreen() {
             // Only visible once the keyboard takes half the screen away.
             style={styles.flex}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => <Bubble message={item} />}
+            renderItem={({ item }) => <Bubble message={item} onReuse={confirmReuse} />}
             // The list holds the answers, so it should not eat a tap meant for
             // the keyboard's dismissal.
             // `interactive` follows the finger on iOS, which is what people
@@ -297,6 +322,7 @@ export default function AskScreen() {
             underneath it, left the screen with no way out at all.
           */}
           <TextInput
+            ref={input}
             value={draft}
             onChangeText={setDraft}
             onSubmitEditing={submit}
@@ -340,10 +366,16 @@ export default function AskScreen() {
 function Bubble({
   message,
   accessibilityLabel,
+  onReuse,
 }: {
   message: AskMessage;
   /** Set while an answer is still arriving, so it is not read as finished. */
   accessibilityLabel?: string;
+  /**
+   * Offered only for the user's own messages. An answer is not a question, so
+   * there is nothing to put back in the box.
+   */
+  onReuse?: (text: string) => void;
 }) {
   const theme = useTheme();
   const mine = message.role === 'user';
@@ -357,7 +389,7 @@ function Bubble({
     ? null
     : planRender(message.envelope?.render, { currency: message.currency ?? 'NZD' });
 
-  return (
+  const bubble = (
     <View
       accessibilityLabel={accessibilityLabel}
       style={[
@@ -392,6 +424,21 @@ function Bubble({
       {plan && <AnswerView plan={plan} currency={message.currency ?? 'NZD'} />}
     </View>
   );
+
+  // A row, not the list: `keyboardShouldPersistTaps="handled"` lets a child
+  // claim a tap while the list still scrolls. Wrapping the *list* in a
+  // Pressable is what stopped it scrolling once before.
+  if (!mine || !onReuse) return bubble;
+
+  return (
+    <Pressable
+      onPress={() => onReuse(message.text)}
+      accessibilityRole="button"
+      accessibilityLabel={`${message.text}, use again`}
+      style={({ pressed }) => [styles.reusable, { opacity: pressed ? 0.7 : 1 }]}>
+      {bubble}
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -403,6 +450,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // The bubble inside keeps its own `alignSelf`, so the wrapper spanning the
+  // row changes nothing about where it sits.
+  reusable: { width: '100%' },
   more: { minWidth: MinTouchTarget, minHeight: MinTouchTarget, alignItems: 'flex-end', justifyContent: 'center' },
   listContent: { padding: Spacing.four, gap: Spacing.three },
   link: { textDecorationLine: 'underline' },
