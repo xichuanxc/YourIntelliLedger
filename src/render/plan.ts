@@ -98,6 +98,18 @@ export function planRender(
   // A table reads its numbers from every series at once; the others plot one.
   if (spec.type === 'table') return planTable(spec);
 
+  /**
+   * Two or more series become a table, whatever chart was asked for.
+   *
+   * Not a layout preference. Every chart branch below reads `series[0]` and
+   * only `series[0]`, so drawing a two-series answer as a bar chart would
+   * quietly discard the second one — the reader sees a chart that looks
+   * complete and is missing half the answer. A table shows all of them, and
+   * is also what a bubble-width column can actually fit once a legend is
+   * required to tell the series apart.
+   */
+  if ((spec.series?.length ?? 0) > 1) return planTable(spec);
+
   const series = spec.series?.[0];
   if (!series || series.values.length === 0) return NOTHING;
 
@@ -174,9 +186,20 @@ export function planRender(
  * silently discards an answer. Text only.
  */
 function planTable(spec: RenderSpec): RenderPlan {
-  const rowLabels = spec.x?.values ?? [];
   const series = spec.series ?? [];
-  if (rowLabels.length === 0 || series.length === 0) return NOTHING;
+  if (series.length === 0 || series[0].values.length === 0) return NOTHING;
+
+  /**
+   * Missing row labels are repaired the same way a missing axis label is: a
+   * label is a reading aid, and a position is a worse one but still true.
+   * Discarding the numbers because nobody named the rows would lose the
+   * answer over its annotation.
+   */
+  const rowLabels =
+    spec.x?.values && spec.x.values.length > 0
+      ? spec.x.values
+      : series[0].values.map((_, index) => String(index + 1));
+
   if (series.some((column) => column.values.length !== rowLabels.length)) return NOTHING;
 
   const columns = [spec.x?.label ?? '', ...series.map((column, index) => column.label ?? `#${index + 1}`)];

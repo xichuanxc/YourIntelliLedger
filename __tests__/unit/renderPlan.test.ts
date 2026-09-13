@@ -192,9 +192,26 @@ describe('a table', () => {
     ).toEqual({ kind: 'none' });
   });
 
-  it('falls back to text with no rows or no columns', () => {
-    expect(planRender({ type: 'table', series: money([1]) }, context)).toEqual({ kind: 'none' });
+  /**
+   * Only one of these is unrepairable. With no series there are no numbers and
+   * nothing to show; with no row labels there are numbers, and a position is a
+   * poorer label than a name but far better than discarding the answer over
+   * its annotation.
+   */
+  it('falls back to text when there are no numbers at all', () => {
     expect(planRender({ type: 'table', x: { values: ['a'] } }, context)).toEqual({ kind: 'none' });
+    expect(planRender({ type: 'table', series: [{ label: 'NZD', values: [] }] }, context)).toEqual({
+      kind: 'none',
+    });
+  });
+
+  it('numbers the rows rather than dropping them when none are named', () => {
+    const plan = planRender({ type: 'table', series: money([1, 2]) }, context);
+    if (plan.kind !== 'table') throw new Error('expected table');
+    expect(plan.rows).toEqual([
+      ['1', '1'],
+      ['2', '2'],
+    ]);
   });
 });
 
@@ -245,6 +262,58 @@ describe('one value is a headline, whatever was asked for', () => {
   });
 
   it('still charts two values', () => {
+    expect(planRender({ type: 'bar', series: money([1, 2]) }, context)).toMatchObject({
+      kind: 'bars',
+    });
+  });
+});
+
+/**
+ * Every chart branch reads `series[0]` and only `series[0]`, so a two-series
+ * answer drawn as a chart would quietly lose half of itself. A table is the
+ * one form that shows all of them.
+ */
+describe('more than one series', () => {
+  const two = [
+    { label: 'NZD', values: [64.2, 43.1] },
+    { label: 'Items', values: [3, 5] },
+  ];
+
+  it.each(['bar', 'line', 'donut', 'stat'] as const)(
+    'turns a two-series %s into a table rather than dropping one',
+    (type) => {
+      const plan = planRender({ type, x: { values: ['Produce', 'Dairy'] }, series: two }, context);
+      expect(plan).toMatchObject({ kind: 'table' });
+      if (plan.kind !== 'table') throw new Error('expected table');
+      // Both series survived, as columns.
+      expect(plan.columns).toEqual(['', 'NZD', 'Items']);
+      expect(plan.rows[0]).toEqual(['Produce', '64.20', '3']);
+    }
+  );
+
+  /** A position is a worse label than a name and still better than losing the row. */
+  it('numbers the rows when the model named none', () => {
+    const plan = planRender({ type: 'bar', series: two }, context);
+    if (plan.kind !== 'table') throw new Error('expected table');
+    expect(plan.rows.map((row) => row[0])).toEqual(['1', '2']);
+  });
+
+  it('still refuses a ragged pair, where no repair is honest', () => {
+    expect(
+      planRender(
+        {
+          type: 'bar',
+          series: [
+            { label: 'NZD', values: [1, 2] },
+            { label: 'Items', values: [1] },
+          ],
+        },
+        context
+      )
+    ).toEqual({ kind: 'none' });
+  });
+
+  it('leaves a single series as the chart it asked for', () => {
     expect(planRender({ type: 'bar', series: money([1, 2]) }, context)).toMatchObject({
       kind: 'bars',
     });
