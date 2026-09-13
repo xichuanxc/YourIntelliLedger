@@ -29,7 +29,11 @@ import type { BillReference } from '@/agent/execute';
 import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
-import { recordQuestion } from '@/data/questionsRepo';
+import {
+  getFrequentQuestions,
+  recordQuestion,
+  type FrequentQuestion,
+} from '@/data/questionsRepo';
 import { logQuery } from '@/data/telemetryRepo';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 
@@ -62,6 +66,16 @@ interface AskState {
   /** True from send until the answer lands — what the typing indicator reads. */
   thinking: boolean;
   /**
+   * This user's most-asked questions, for the empty state to offer back.
+   *
+   * Empty for someone who has not asked anything yet, which is the case the
+   * static examples exist for — suggesting nothing would be worse than
+   * suggesting a stranger's questions, but only just.
+   */
+  suggestions: FrequentQuestion[];
+  /** Reloads them; the screen calls this when it appears. */
+  loadSuggestions: () => Promise<void>;
+  /**
    * The answer as it arrives, decoded from §14.7's half-written envelope.
    *
    * Empty until the model starts writing its `text` field, which is why the
@@ -73,6 +87,12 @@ interface AskState {
   clear: () => void;
 }
 
+/**
+ * Four is enough to be useful and few enough to read at a glance. More turns
+ * a prompt into a menu, and the box below it is still the main way in.
+ */
+const SUGGESTION_COUNT = 4;
+
 let counter = 0;
 const nextId = () => `m${(counter += 1)}`;
 
@@ -81,6 +101,16 @@ export const useAskStore = create<AskState>((set, get) => ({
   history: [],
   thinking: false,
   streaming: '',
+  suggestions: [],
+
+  loadSuggestions: async () => {
+    try {
+      set({ suggestions: await getFrequentQuestions(await getDb(), SUGGESTION_COUNT) });
+    } catch {
+      // A suggestion list is a convenience. Failing to read it must not stop
+      // someone typing their question.
+    }
+  },
 
   clear: () => set({ messages: [], history: [], thinking: false, streaming: '' }),
 
@@ -166,6 +196,9 @@ export const useAskStore = create<AskState>((set, get) => ({
     if (turn.log.outcome !== 'error') {
       try {
         await recordQuestion(db, question);
+        // Reflect the new count straight away, so the list a user sees next
+        // time matches what they have actually been asking.
+        set({ suggestions: await getFrequentQuestions(db, SUGGESTION_COUNT) });
       } catch {
         // Same rule as above: a suggestion list is a convenience and must
         // never cost someone the answer they just received.

@@ -13,6 +13,7 @@ import { Keyboard, StyleSheet } from 'react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 import AskScreen from '@/app/(tabs)/ask';
+import type { FrequentQuestion } from '@/data/questionsRepo';
 import { router } from 'expo-router';
 import { useAskStore, type AskMessage } from '@/ui/stores/ask-store';
 
@@ -37,13 +38,21 @@ const draw = (ui: React.ReactElement) =>
 
 const mockedStore = useAskStore as unknown as jest.Mock;
 const send = jest.fn();
+const loadSuggestions = jest.fn().mockResolvedValue(undefined);
 
-function withState(messages: AskMessage[], thinking = false, streaming = '') {
+function withState(
+  messages: AskMessage[],
+  thinking = false,
+  streaming = '',
+  suggestions: FrequentQuestion[] = []
+) {
   mockedStore.mockReturnValue({
     messages,
     thinking,
     streaming,
+    suggestions,
     send,
+    loadSuggestions,
     history: [],
     clear: jest.fn(),
   });
@@ -54,6 +63,7 @@ const push = jest.spyOn(router, 'push').mockImplementation(() => undefined);
 beforeEach(() => {
   send.mockClear();
   push.mockClear();
+  loadSuggestions.mockClear();
 });
 
 describe('an empty conversation', () => {
@@ -61,6 +71,57 @@ describe('an empty conversation', () => {
     withState([]);
     await draw(<AskScreen />);
     expect(screen.getByText('Ask about your spending')).toBeTruthy();
+  });
+});
+
+/**
+ * Someone's own past questions, offered back (§6, Week 8). Static examples are
+ * a guess at what a stranger wants; these are what this person actually asks,
+ * so they take the empty state's place as soon as there are any.
+ */
+describe('suggesting questions the user has asked before', () => {
+  const asked: FrequentQuestion[] = [
+    { text: 'how much on groceries last month?', askedCount: 5 },
+    { text: 'which shop do I go to most?', askedCount: 2 },
+  ];
+
+  it('loads them when the screen appears', async () => {
+    withState([]);
+    await draw(<AskScreen />);
+    expect(loadSuggestions).toHaveBeenCalled();
+  });
+
+  it('offers the user’s own questions in place of the examples', async () => {
+    withState([], false, '', asked);
+    await draw(<AskScreen />);
+
+    expect(screen.getByText('how much on groceries last month?')).toBeTruthy();
+    expect(screen.queryByText(/Try “how much did I spend/)).toBeNull();
+  });
+
+  it('falls back to examples for someone who has asked nothing yet', async () => {
+    withState([]);
+    await draw(<AskScreen />);
+
+    expect(screen.getByText(/Try “how much did I spend/)).toBeTruthy();
+    expect(screen.queryByLabelText(/^Ask again/)).toBeNull();
+  });
+
+  it('asks the question again when one is tapped', async () => {
+    withState([], false, '', asked);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Ask again: which shop do I go to most?'));
+
+    expect(send).toHaveBeenCalledWith('which shop do I go to most?');
+  });
+
+  /** Once there is a conversation, the empty state and its chips are gone. */
+  it('stops offering them once the conversation has started', async () => {
+    withState([{ id: 'a', role: 'user', text: 'how much?' }], false, '', asked);
+    await draw(<AskScreen />);
+
+    expect(screen.queryByLabelText(/^Ask again/)).toBeNull();
   });
 });
 

@@ -91,7 +91,7 @@ export default function AskScreen() {
   // Android only: iOS's `KeyboardAvoidingView` already moves the composer, and
   // adding the height there would lift it by the keyboard twice over.
   const androidKeyboardInset = Platform.OS === 'android' ? keyboardHeight : 0;
-  const { messages, thinking, streaming, send } = useAskStore();
+  const { messages, thinking, streaming, suggestions, send, loadSuggestions } = useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
 
@@ -107,6 +107,12 @@ export default function AskScreen() {
     // behind the composer — the conversation looks covered, when really it
     // just did not scroll.
   }, [messages.length, thinking, streaming, keyboardHeight]);
+
+  // Loaded when the screen appears rather than once at import, so a question
+  // asked on a previous visit is offered on this one.
+  useEffect(() => {
+    void loadSuggestions();
+  }, [loadSuggestions]);
 
   const submit = () => {
     const text = draft.trim();
@@ -151,10 +157,39 @@ export default function AskScreen() {
             <EmptyState
               title="Ask about your spending"
               message={
-                'Try “how much did I spend on groceries last month?” or “which shop do I ' +
-                'go to most?”. Answers come from the bills on this phone.'
+                suggestions.length > 0
+                  ? 'Answers come from the bills on this phone. Ask again, or type something new.'
+                  : 'Try “how much did I spend on groceries last month?” or “which shop do I ' +
+                    'go to most?”. Answers come from the bills on this phone.'
               }
             />
+
+            {/*
+              This user's own questions, once there are any. Examples are a
+              guess at what a stranger wants; these are what they actually ask.
+            */}
+            {suggestions.length > 0 && (
+              <View style={styles.suggestions}>
+                {suggestions.map((suggestion) => (
+                  <Pressable
+                    key={suggestion.text}
+                    onPress={() => void send(suggestion.text)}
+                    disabled={thinking}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ask again: ${suggestion.text}`}
+                    style={({ pressed }) => [
+                      styles.suggestion,
+                      {
+                        backgroundColor: theme.backgroundElement,
+                        borderColor: theme.border,
+                        opacity: pressed ? 0.7 : 1,
+                      },
+                    ]}>
+                    <ThemedText type="small">{suggestion.text}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </Pressable>
         ) : (
           <FlatList
@@ -337,6 +372,14 @@ const styles = StyleSheet.create({
   // Outside the list, so an answer in progress does not need a row inserting
   // and removing on every token.
   streaming: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
+  suggestions: { paddingHorizontal: Spacing.four, gap: Spacing.two, paddingBottom: Spacing.four },
+  suggestion: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   thinking: {
     flexDirection: 'row',
     alignItems: 'center',
