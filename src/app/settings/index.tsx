@@ -53,7 +53,12 @@ export default function SettingsScreen() {
   const [draft, setDraft] = useState('');
   const [askKey, setAskKeyState] = useState<string | null>(null);
   const [askOwn, setAskOwn] = useState(false);
+  // Whether Ask shares the receipt key. Separate from `askOwn` because the
+  // switch can be off while no key has been entered yet — that is the state
+  // the field exists for, and deriving it from storage would flip it back.
+  const [askShared, setAskShared] = useState(true);
   const [askDraft, setAskDraft] = useState('');
+  const [askStatus, setAskStatus] = useState<string | null>(null);
   const [model, setModel] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,7 +72,9 @@ export default function SettingsScreen() {
     void (async () => {
       setExisting(await getByokKey());
       setAskKeyState(await getAskKey());
-      setAskOwn(await hasOwnAskKey());
+      const own = await hasOwnAskKey();
+      setAskOwn(own);
+      setAskShared(!own);
       setModel(await getByokModel());
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
@@ -81,18 +88,63 @@ export default function SettingsScreen() {
     }, [])
   );
 
+  /**
+   * Saves the receipt key and model — and nothing else.
+   *
+   * This used to save the Ask key too, which is why there was no way to tell
+   * what the button did: the Ask section had a box and no button, so its value
+   * was committed by a button in another section that also rewrote the receipt
+   * key. Each key is now saved only by its own control.
+   */
   const save = async () => {
     setBusy(true);
     try {
       await setByokKey(draft);
       await setByokModel(model);
-      if (askDraft.trim() !== '') await setAskKey(askDraft);
       setExisting(await getByokKey());
+      // Ask inherits this key while sharing, so its display follows.
+      setAskKeyState(await getAskKey());
+      setDraft('');
+      setStatus('Saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Turning sharing back on drops the separate key.
+   *
+   * Keeping it dormant would leave a key in the keystore that nothing uses and
+   * nothing shows — and §8.2's rule is that a key exists only while it is
+   * needed. Switching back off asks for it again, which is the honest cost.
+   */
+  const shareKey = async (share: boolean) => {
+    setAskShared(share);
+    setAskStatus(null);
+    if (!share) return;
+
+    setBusy(true);
+    try {
+      await clearAskKey();
+      setAskKeyState(await getAskKey());
+      setAskOwn(false);
+      setAskDraft('');
+      setAskStatus('Ask is using the receipt key.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** The Ask key's own save, independent of the receipts one. */
+  const saveAskKey = async () => {
+    if (askDraft.trim() === '') return;
+    setBusy(true);
+    try {
+      await setAskKey(askDraft);
       setAskKeyState(await getAskKey());
       setAskOwn(await hasOwnAskKey());
-      setDraft('');
       setAskDraft('');
-      setStatus('Saved.');
+      setAskStatus('Saved. Ask is using its own key.');
     } finally {
       setBusy(false);
     }
@@ -202,35 +254,60 @@ export default function SettingsScreen() {
               : 'No key set'}
           </ThemedText>
 
-          <TextField
-            label={askOwn ? 'Replace key' : 'Separate key for Ask'}
-            value={askDraft}
-            onChangeText={setAskDraft}
-            placeholder="Paste your key"
-            autoCapitalize="none"
-            autoCorrect={false}
-            secureTextEntry
-            hint="Only needed when Ask uses a different provider from receipts. Leave blank to keep using the receipt key."
-          />
-
-          {askOwn && (
-            <Button
-              label="Use the receipt key instead"
-              variant="secondary"
-              busy={busy}
-              onPress={async () => {
-                setBusy(true);
-                try {
-                  await clearAskKey();
-                  setAskKeyState(await getAskKey());
-                  setAskOwn(false);
-                  setAskDraft('');
-                  setStatus('Ask is using the receipt key again.');
-                } finally {
-                  setBusy(false);
-                }
-              }}
+          {/*
+            Sharing is the common case — most people run both on one Gemini
+            key — so it is the default and needs no typing. The separate key
+            only appears once someone says the two providers differ.
+          */}
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Use the same key as reading receipts</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Switch this off only if Ask uses a different provider.
+              </ThemedText>
+            </View>
+            <Switch
+              value={askShared}
+              onValueChange={shareKey}
+              disabled={busy}
+              accessibilityLabel="Use the same key as reading receipts"
             />
+          </View>
+
+          {/*
+            Hidden rather than disabled while sharing: a greyed-out box still
+            invites a tap and still has to be explained.
+          */}
+          {!askShared && (
+            <>
+              <TextField
+                label={askOwn ? 'Replace the Ask key' : 'Key for Ask'}
+                value={askDraft}
+                onChangeText={setAskDraft}
+                placeholder="Paste your key"
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+                hint={
+                  askOwn
+                    ? 'Leave blank to keep the current Ask key.'
+                    : 'Until this is saved, Ask keeps using the receipt key.'
+                }
+              />
+
+              <Button
+                label="Save Ask key"
+                busy={busy}
+                disabled={askDraft.trim() === ''}
+                onPress={saveAskKey}
+              />
+            </>
+          )}
+
+          {askStatus && (
+            <ThemedText type="small" themeColor="success">
+              {askStatus}
+            </ThemedText>
           )}
         </Section>
 
