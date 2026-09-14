@@ -27,6 +27,7 @@ import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 import { GearIcon } from '@/ui/components/gear-icon';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
+import { useExitConfirm } from '@/ui/hooks/use-exit-confirm';
 import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { useLedgerStore } from '@/ui/stores/ledger-store';
@@ -39,6 +40,10 @@ export default function LedgerScreen() {
   // The last row has two things over it, not one: iOS's translucent tab bar,
   // and the floating button on both platforms.
   const listBottomPadding = useFabBottom() + FAB_SIZE + Spacing.four;
+
+  // §7: the root of the tab stack has nowhere to go back to, so Android's back
+  // button would otherwise close the app on a single absent-minded press.
+  useExitConfirm();
 
   // Refetch on focus rather than on mount: returning from the edit or capture
   // screen has to show the change, and those screens are separate routes.
