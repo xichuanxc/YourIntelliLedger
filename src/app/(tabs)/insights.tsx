@@ -19,17 +19,25 @@ import {
   getCategoryBreakdown,
   getDataRange,
   getMerchantBreakdown,
+  getMerchantLocations,
   getMonthlyTrend,
   getSpendSummary,
   getWeeklyTrend,
 } from '@/data/insightsRepo';
 import { formatMoney, formatMoneyCompact } from '@/data/money';
-import type { CategoryBreakdown, MerchantTotal, SpendSummary } from '@/types/insights';
+import { getMapPreviews } from '@/data/prefs';
+import type {
+  CategoryBreakdown,
+  MerchantLocation,
+  MerchantTotal,
+  SpendSummary,
+} from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
 import type { BreakdownDimension } from '@/app/insights/breakdown';
 import { DonutBreakdown } from '@/ui/components/donut-breakdown';
 import type { SliceInput } from '@/ui/chartSlices';
 import { EmptyState } from '@/ui/components/empty-state';
+import { MerchantMap } from '@/ui/components/merchant-map';
 import { Screen } from '@/ui/components/screen';
 import { SelectMenu } from '@/ui/components/select-menu';
 import { StatTile } from '@/ui/components/stat-tile';
@@ -75,6 +83,8 @@ interface InsightsData {
   summary: SpendSummary;
   breakdown: CategoryBreakdown;
   merchants: MerchantTotal[];
+  /** The subset of those merchants that has an address to put on a map. */
+  locations: MerchantLocation[];
   trend: TrendBar[];
   period: Period;
   hasAnyBills: boolean;
@@ -88,6 +98,11 @@ export default function InsightsScreen() {
   // Without this the merchant donut — the last thing on the screen — scrolls
   // to rest underneath iOS's translucent tab bar.
   const tabBarInset = useTabBarInset();
+
+  // Read once, on mount, exactly as the bill screen does: flipping the switch
+  // in Settings takes effect the next time Insights is opened rather than
+  // pulling a map out from under someone reading it.
+  const [previewsOn] = useState(getMapPreviews);
 
   const [range, setRange] = useState<RangeKey>('m3');
   const [data, setData] = useState<InsightsData | null>(null);
@@ -109,10 +124,13 @@ export default function InsightsScreen() {
         ? periodOfLastWeeks(count, anchorDate)
         : periodOfLastMonths(count, anchorDate);
 
-    const [summary, breakdown, merchants, trend] = await Promise.all([
+    const [summary, breakdown, merchants, locations, trend] = await Promise.all([
       getSpendSummary(db, period),
       getCategoryBreakdown(db, period),
       getMerchantBreakdown(db, period, 6),
+      // Eight is the point where pins in one suburb start to overlap more than
+      // they inform; the donut below still covers the rest.
+      getMerchantLocations(db, period, 8),
       unit === 'week'
         ? getWeeklyTrend(db, count, anchorDate).then((weeks) =>
             weeks.map((week) => ({
@@ -132,6 +150,7 @@ export default function InsightsScreen() {
       summary,
       breakdown,
       merchants,
+      locations,
       trend,
       period,
       hasAnyBills: dataRange.lastBill !== null,
@@ -147,6 +166,9 @@ export default function InsightsScreen() {
   );
 
   const chartWidth = Math.min(width, MaxContentWidth) - Spacing.four * 2 - Spacing.four * 2;
+  // The chart sits inside a padded card; the map *is* the card, so it only
+  // gives up the screen's own side padding.
+  const mapWidth = Math.min(width, MaxContentWidth) - Spacing.four * 2;
 
   const chart = useMemo(() => {
     if (!data) return null;
@@ -190,7 +212,7 @@ export default function InsightsScreen() {
     );
   }
 
-  const { summary, breakdown, merchants, period } = data;
+  const { summary, breakdown, merchants, locations, period } = data;
 
   // The remainder is marked neutral so the slice builder never folds it away —
   // it is where §14.6's undercount becomes visible.
@@ -336,6 +358,31 @@ export default function InsightsScreen() {
                 </ThemedText>
               )}
             </Section>
+
+            {/*
+              Where the money went, above the breakdown of how much. Absent
+              entirely when map previews are switched off (§4.14) — the same
+              silent treatment the bill screen gives it, rather than a second
+              way of explaining one setting.
+            */}
+            {previewsOn && locations.length > 0 && mapWidth > 0 && (
+              <Section
+                title="Where you shopped"
+                caption="Each pin's size is that shop's share of the mapped spending. Tap one to see its bills.">
+                <MerchantMap
+                  locations={locations}
+                  width={mapWidth}
+                  currency={summary.currency}
+                  onSelect={(location) =>
+                    openBreakdown(
+                      'merchant',
+                      location.merchantNorm ?? 'unnamed',
+                      location.merchant ?? 'Unnamed merchant'
+                    )
+                  }
+                />
+              </Section>
+            )}
 
             <Section title="Top merchants">
               <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>

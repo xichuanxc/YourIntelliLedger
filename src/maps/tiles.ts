@@ -15,6 +15,22 @@
 export const TILE_SIZE = 256;
 
 /**
+ * OpenStreetMap's own tile servers. Free and keyless, which is the point, but
+ * their policy discourages heavy use by distributed apps — a released build
+ * should swap this one constant for a hosted provider. The `{s}`-style
+ * subdomains are deliberately not used; OSM asks clients not to.
+ *
+ * Here rather than in a component because two screens draw maps now, and two
+ * copies of a tile source is how one of them quietly keeps using the old one.
+ */
+export const OSM_TILE_TEMPLATE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/** OSM asks for an identifying User-Agent on tile requests too. */
+export const OSM_TILE_HEADERS = {
+  'User-Agent': 'YourIntelliLedger/0.1 (COMPX576 student project)',
+};
+
+/**
  * Street level. Low enough that the surrounding blocks give the address
  * context, high enough that the building is distinguishable.
  */

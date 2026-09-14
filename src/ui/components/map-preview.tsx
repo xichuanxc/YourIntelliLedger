@@ -22,22 +22,17 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { geocode, type GeoPoint } from '@/maps/geocode';
 import { readCache, writeCache } from '@/maps/geocodeCache';
-import { tileGrid, tileUrl, TILE_SIZE } from '@/maps/tiles';
+import {
+  OSM_TILE_HEADERS,
+  OSM_TILE_TEMPLATE,
+  tileGrid,
+  tileUrl,
+  TILE_SIZE,
+} from '@/maps/tiles';
 import { MapPinIcon } from '@/ui/components/map-icons';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { Radius, Spacing } from '@/ui/theme';
-
-/**
- * OpenStreetMap's own tile servers. Free and keyless, which is the point, but
- * their policy discourages heavy use by distributed apps — a released build
- * should swap this one constant for a hosted provider. The `{s}`-style
- * subdomains are deliberately not used; OSM asks clients not to.
- */
-const TILE_TEMPLATE = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-/** OSM asks for an identifying User-Agent on tile requests too. */
-const TILE_HEADERS = { 'User-Agent': 'YourIntelliLedger/0.1 (COMPX576 student project)' };
 
 const PREVIEW_HEIGHT = 132;
 
@@ -146,7 +141,7 @@ export function MapPreview({ address, width, onPress }: MapPreviewProps) {
             (tile) => (
               <Image
                 key={tile.key}
-                source={{ uri: tileUrl(TILE_TEMPLATE, tile), headers: TILE_HEADERS }}
+                source={{ uri: tileUrl(OSM_TILE_TEMPLATE, tile), headers: OSM_TILE_HEADERS }}
                 style={[styles.tile, { left: tile.left, top: tile.top }]}
                 // Tiles are immutable for a given z/x/y, so they are worth
                 // keeping on disk between launches.
