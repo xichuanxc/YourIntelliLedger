@@ -59,6 +59,25 @@ export function project({ lon, lat }: LonLat, zoom: number): { x: number; y: num
 }
 
 /**
+ * The inverse of `project` — fractional tile coordinates back to a point.
+ *
+ * Needed wherever a centre is *computed* rather than given. Fitting several
+ * pins into one viewport (`fit.ts`) works out its centre in projected space,
+ * because that is the space distances are uniform in, and `tileGrid` wants a
+ * longitude and latitude back.
+ */
+export function unproject({ x, y }: { x: number; y: number }, zoom: number): LonLat {
+  const n = 2 ** zoom;
+  // The Mercator inverse: sinh undoes the log-tangent in `project`.
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+
+  return {
+    lon: (x / n) * 360 - 180,
+    lat: (latRad * 180) / Math.PI,
+  };
+}
+
+/**
  * The tiles covering a `width` × `height` viewport centred on `point`, each
  * with its offset from the viewport's top-left.
  *

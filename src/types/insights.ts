@@ -47,6 +47,22 @@ export interface CategoryBreakdown {
   totalCents: number;
 }
 
+/**
+ * A merchant with somewhere to put a pin (§4.14).
+ *
+ * Separate from `MerchantTotal` because the address is the whole point: a
+ * merchant with no address on any receipt cannot be mapped, and is left out
+ * rather than represented by a pin in the wrong place.
+ */
+export interface MerchantLocation {
+  merchant: string | null;
+  merchantNorm: string | null;
+  /** As printed on the receipt (§4.14) — what the geocoder is given. */
+  address: string;
+  totalCents: number;
+  billCount: number;
+}
+
 export interface MerchantTotal {
   /** As printed, for display. NULL when the bill recorded no merchant. */
   merchant: string | null;

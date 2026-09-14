@@ -31,6 +31,7 @@ import type {
   CategoryTotal,
   DataRange,
   MerchantBill,
+  MerchantLocation,
   MerchantTotal,
   MonthTotal,
   SpendSummary,
@@ -405,4 +406,62 @@ export async function getDataRange(db: SqlDriver): Promise<DataRange> {
 export async function getLatestMonth(db: SqlDriver): Promise<string | null> {
   const range = await getDataRange(db);
   return range.lastBill ? monthOf(range.lastBill) : null;
+}
+
+/**
+ * Merchants in a period that can be placed on a map (§4.14).
+ *
+ * Grouped on `merchant_norm` like `getMerchantBreakdown`, and the total counts
+ * **every** bill in the group: a shop's spending does not stop counting
+ * because one of its receipts had no address printed on it. The address comes
+ * from the most recent bill that carried one, so a shop that moved is pinned
+ * where it is now rather than where it was.
+ *
+ * Merchants with no address anywhere in the period are dropped. There is no
+ * honest pin for them, and a map that quietly omits them is better than one
+ * that guesses — the breakdown above it still shows their spending.
+ *
+ * The limit is applied after that filter, so asking for eight mappable
+ * merchants does not return three because five of them were addressless.
+ */
+export async function getMerchantLocations(
+  db: SqlDriver,
+  period: Period,
+  limit = 8
+): Promise<MerchantLocation[]> {
+  const rows = await db.all<{
+    merchant: string | null;
+    merchant_norm: string | null;
+    address: string | null;
+    total_cents: number | null;
+    bill_count: number;
+  }>(
+    `SELECT MAX(b.merchant) AS merchant,
+            b.merchant_norm,
+            SUM(b.total_cents) AS total_cents,
+            COUNT(*) AS bill_count,
+            (SELECT recent.merchant_address
+               FROM bills recent
+              WHERE recent.merchant_norm IS b.merchant_norm
+                AND recent.merchant_address IS NOT NULL
+                AND recent.purchased_at BETWEEN ? AND ?
+              ORDER BY recent.purchased_at DESC, recent.id DESC
+              LIMIT 1) AS address
+       FROM bills b
+      WHERE b.purchased_at BETWEEN ? AND ?
+      GROUP BY b.merchant_norm
+      ORDER BY total_cents DESC, b.merchant_norm`,
+    [...periodParams(period), ...periodParams(period)]
+  );
+
+  return rows
+    .filter((row): row is typeof row & { address: string } => row.address !== null)
+    .slice(0, limit)
+    .map((row) => ({
+      merchant: row.merchant,
+      merchantNorm: row.merchant_norm,
+      address: row.address,
+      totalCents: row.total_cents ?? 0,
+      billCount: row.bill_count,
+    }));
 }
