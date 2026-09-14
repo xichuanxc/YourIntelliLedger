@@ -104,6 +104,13 @@ export default function InsightsScreen() {
   // pulling a map out from under someone reading it.
   const [previewsOn] = useState(getMapPreviews);
 
+  /**
+   * True while the map is being dragged, so the page stops scrolling under it.
+   * Without this the two gestures compete and the map feels like it fights
+   * the finger.
+   */
+  const [mapDragging, setMapDragging] = useState(false);
+
   const [range, setRange] = useState<RangeKey>('m3');
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -267,7 +274,9 @@ export default function InsightsScreen() {
   return (
     <Screen>
       <Header />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarInset + Spacing.seven }]}>
+      <ScrollView
+        scrollEnabled={!mapDragging}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarInset + Spacing.seven }]}>
         <SelectMenu label="Period" options={RANGE_OPTIONS} value={range} onChange={setRange} />
 
         <ThemedText type="small" themeColor="textSecondary">
@@ -373,12 +382,9 @@ export default function InsightsScreen() {
                   locations={locations}
                   width={mapWidth}
                   currency={summary.currency}
-                  onSelect={(location) =>
-                    openBreakdown(
-                      'merchant',
-                      location.merchantNorm ?? 'unnamed',
-                      location.merchant ?? 'Unnamed merchant'
-                    )
+                  onDragChange={setMapDragging}
+                  onSelect={(merchantNorm, label) =>
+                    openBreakdown('merchant', merchantNorm ?? 'unnamed', label)
                   }
                 />
               </Section>
