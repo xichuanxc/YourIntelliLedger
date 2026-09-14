@@ -11,7 +11,7 @@
  * country.
  */
 
-import { fitPoints, placePoints } from '@/maps/fit';
+import { fitPoints, panCentre, placePoints } from '@/maps/fit';
 import { DEFAULT_ZOOM, type LonLat } from '@/maps/tiles';
 
 const HAMILTON: LonLat = { lat: -37.787, lon: 175.279 };
@@ -95,5 +95,46 @@ describe('placing against a view that is already chosen', () => {
     // North is a smaller y in screen terms; HAMILTON_NORTH is west, so left.
     expect(placement.y).toBeLessThan(HEIGHT / 2);
     expect(placement.x).toBeLessThan(WIDTH / 2);
+  });
+});
+
+/**
+ * Dragging the map. The sign convention is the whole point: a map that moves
+ * the wrong way under the finger is obvious in the hand and invisible in the
+ * code.
+ */
+describe('panning', () => {
+  const ZOOM = 12;
+
+  it('leaves the centre alone when nothing moved', () => {
+    const centre = panCentre(HAMILTON, ZOOM, 0, 0);
+    expect(centre.lat).toBeCloseTo(HAMILTON.lat, 9);
+    expect(centre.lon).toBeCloseTo(HAMILTON.lon, 9);
+  });
+
+  /** Dragging right reveals what was off the left edge, so the centre goes west. */
+  it('moves the centre west when the map is dragged right', () => {
+    expect(panCentre(HAMILTON, ZOOM, 120, 0).lon).toBeLessThan(HAMILTON.lon);
+  });
+
+  /** Dragging down reveals what was above, so the centre goes north. */
+  it('moves the centre north when the map is dragged down', () => {
+    expect(panCentre(HAMILTON, ZOOM, 0, 120).lat).toBeGreaterThan(HAMILTON.lat);
+  });
+
+  it('comes back to where it started when dragged back', () => {
+    const there = panCentre(HAMILTON, ZOOM, 90, -40);
+    const back = panCentre(there, ZOOM, -90, 40);
+
+    expect(back.lat).toBeCloseTo(HAMILTON.lat, 9);
+    expect(back.lon).toBeCloseTo(HAMILTON.lon, 9);
+  });
+
+  /** The same drag covers less ground the further in you are. */
+  it('moves a shorter distance at a closer zoom', () => {
+    const far = Math.abs(panCentre(HAMILTON, 8, 100, 0).lon - HAMILTON.lon);
+    const close = Math.abs(panCentre(HAMILTON, 16, 100, 0).lon - HAMILTON.lon);
+
+    expect(close).toBeLessThan(far);
   });
 });

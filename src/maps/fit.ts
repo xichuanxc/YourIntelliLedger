@@ -99,6 +99,23 @@ export function fitPoints(
 }
 
 /**
+ * The centre after dragging the map by `dx`, `dy` screen pixels.
+ *
+ * The sign is the part worth stating: dragging the map to the *right* shows
+ * what was off the left edge, so the centre moves **west**, not east. Getting
+ * it backwards produces a map that fights the finger, which is obvious in the
+ * hand and invisible in the code — hence a test.
+ *
+ * Distance per pixel depends on zoom, which is why the pan is applied in
+ * projected space at the zoom being displayed rather than stored as an offset
+ * and reinterpreted later.
+ */
+export function panCentre(centre: LonLat, zoom: number, dx: number, dy: number): LonLat {
+  const origin = project(centre, zoom);
+  return unproject({ x: origin.x - dx / TILE_SIZE, y: origin.y - dy / TILE_SIZE }, zoom);
+}
+
+/**
  * Where each point sits in a viewport of `width` × `height` centred on
  * `centre` at `zoom`, in pixels from the top-left.
  *
