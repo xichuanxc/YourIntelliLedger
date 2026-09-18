@@ -215,6 +215,33 @@ describe('superlatives', () => {
   });
 });
 
+/**
+ * The wiring, not the generator — that has its own suite. This checks a real
+ * answer off a real database carries the suggestions the chips read, which is
+ * the part that would silently do nothing if they were attached in the wrong
+ * place.
+ */
+describe('suggesting what to ask next', () => {
+  it('carries followups the fastpath can answer', async () => {
+    await createBill(db, bill({ purchasedAt: '2026-09-05', totalCents: 2500 }));
+
+    const result = await ask('how much did I spend this month?');
+
+    expect(result?.envelope.followups?.length).toBeGreaterThan(0);
+    for (const followup of result!.envelope.followups!) {
+      expect(await ask(followup)).not.toBeNull();
+    }
+  });
+
+  /** Offering more questions about an empty ledger is noise. */
+  it('offers nothing when there was nothing to add up', async () => {
+    const result = await ask('how much did I spend this month?');
+
+    expect(result?.envelope.text).toMatch(/no bills/i);
+    expect(result?.envelope.followups).toBeUndefined();
+  });
+});
+
 describe('handing back to the agent', () => {
   it('returns null for a question it cannot answer', async () => {
     await createBill(db, bill());

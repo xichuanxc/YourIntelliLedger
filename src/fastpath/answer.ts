@@ -35,6 +35,7 @@ import {
 import { listBills } from '@/data/ledgerRepo';
 import { normaliseMerchant } from '@/data/merchant';
 import { formatMoney } from '@/data/money';
+import { followupsFor } from '@/fastpath/followups';
 import type { FastpathIntent } from '@/fastpath/match';
 import type { PhrasePeriod } from '@/fastpath/datePhrase';
 import type { LocalDate } from '@/types/ledger';
@@ -57,6 +58,11 @@ export interface FastpathAnswer {
    * already formatted its own money and needs nothing.
    */
   currency?: string;
+  /**
+   * Nothing to add up — an empty ledger, or a period with no bills in it.
+   * Suppresses followups: offering more questions about nothing is noise.
+   */
+  empty?: boolean;
 }
 
 /** How many merchants a "where do I shop" chart can show before it blurs. */
@@ -104,6 +110,7 @@ async function windowFor(db: SqlDriver, phrase: PhrasePeriod | null): Promise<Wi
 const NO_BILLS: FastpathAnswer = {
   envelope: { text: 'There are no bills on this phone yet, so there is nothing to add up.' },
   references: [],
+  empty: true,
 };
 
 /** One series of amounts, labelled the way `planRender` recognises money. */
@@ -132,7 +139,7 @@ async function answerTotal(
 
   const summary = await getSpendSummary(db, window.period);
   if (summary.billCount === 0) {
-    return { envelope: { text: `You have no bills ${window.label}.` }, references: [] };
+    return { envelope: { text: `You have no bills ${window.label}.` }, references: [], empty: true };
   }
 
   const money = formatMoney(summary.totalCents, summary.currency);
@@ -348,7 +355,34 @@ async function answerTopMerchant(
  * Null is a real outcome, not an error: a merchant this ledger has never seen
  * is better answered by the agent, which can look inside line items.
  */
+/**
+ * Attaches the questions worth asking next (§6.7).
+ *
+ * A fastpath runs no model, so nothing else would propose them — which left
+ * the instant answers as the only ones with no chips. Suppressed when there
+ * was nothing to answer about in the first place.
+ */
+function withFollowups(
+  answer: FastpathAnswer | null,
+  intent: FastpathIntent,
+  today: LocalDate
+): FastpathAnswer | null {
+  if (!answer || answer.empty) return answer;
+
+  const followups = followupsFor(intent, today);
+  if (followups.length === 0) return answer;
+
+  return { ...answer, envelope: { ...answer.envelope, followups } };
+}
+
 export async function answerFastpath(
+  intent: FastpathIntent,
+  context: FastpathContext
+): Promise<FastpathAnswer | null> {
+  return withFollowups(await answerIntent(intent, context), intent, context.today);
+}
+
+async function answerIntent(
   intent: FastpathIntent,
   context: FastpathContext
 ): Promise<FastpathAnswer | null> {
