@@ -125,19 +125,51 @@ describe('month against month', () => {
  * indistinguishable to the person reading it.
  */
 describe('a question about something it does not recognise', () => {
-  it('declines an item rather than answering with the total', () => {
-    expect(match('please show me how much did I cost on milk last month')).toBeNull();
-    expect(match('how much did I spend on milk')).toBeNull();
-    expect(match('what did I spend on nappies this month')).toBeNull();
+  /**
+   * The general case, not a list of phrasings anyone thought of. A fastpath
+   * claims a question only when every word in it is either stock phrasing or
+   * something the matched pattern consumed, so an unknown object declines
+   * whatever sentence it arrives in.
+   */
+  it.each([
+    'please show me how much did I cost on milk last month',
+    'how much did I spend on milk',
+    'what did I spend on nappies this month',
+    'how much money did I spend on coffee',
+    'what was my total for petrol last month',
+    'how much have I paid for the dog so far',
+    'tell me what I spent on birthday presents',
+    'how much did I spend on wine and cheese',
+    'what did I spend at the dairy on Tuesday',
+    'how much on bread this week',
+    'could you show me my spending on cleaning products',
+    'what have I paid for rent',
+  ])('declines: %s', (question) => {
+    expect(match(question)).toBeNull();
   });
 
-  /** The same question with no object is still a plain total. */
-  it('still claims the total when nothing is being asked about', () => {
-    expect(match('please show me how much did I cost in last month')).toMatchObject({
-      kind: 'total',
-    });
-    expect(match('how much did I spend last month')).toMatchObject({ kind: 'total' });
-    expect(match('how much have I spent in total')).toMatchObject({ kind: 'total' });
+  /** Two categories is not one category, and half an answer is worse than none. */
+  it('declines a question naming more than one category', () => {
+    expect(match('how much did I spend on dairy and meat last month')).toBeNull();
+  });
+
+  /**
+   * The other half of the rule: ordinary ways of asking for the total must
+   * still be instant. A vocabulary that declined these would have traded one
+   * failure for a feature that never fires.
+   */
+  it.each([
+    'please show me how much did I cost in last month',
+    'how much did I spend last month',
+    'how much have I spent in total',
+    'what did I spend this week',
+    'how much money did I spend last month',
+    'total this month',
+    'what was my spending last month',
+    'how much did it all cost last month',
+    'show me how much I spent altogether',
+  ])('still claims the total: %s', (question) => {
+    expect(match(question)).toMatchObject({ kind: 'total' });
   });
 
   /** A recognised object still goes down its own path, not to the agent. */

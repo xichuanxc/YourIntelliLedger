@@ -74,9 +74,9 @@ function categoryVocabulary(): Map<string, Category> {
 
 const CATEGORY_WORDS = categoryVocabulary();
 
-function findCategory(text: string): Category | null {
+function findCategory(text: string): { category: Category; word: string } | null {
   for (const [word, category] of CATEGORY_WORDS) {
-    if (new RegExp(String.raw`\b${word}\b`).test(text)) return category;
+    if (new RegExp(String.raw`\b${word}\b`).test(text)) return { category, word };
   }
   return null;
 }
@@ -113,20 +113,58 @@ const TOP_MERCHANT =
   /\b(which|what)\s+(shop|store|supermarket|merchant)\b|\bwhere do i (shop|spend) (the )?most\b|\b(biggest|top|most visited)\s+(shop|store|merchant)\b/;
 
 /**
- * An object the matcher did not understand — "on milk", "for nappies", "at
- * somewhere it has never heard of".
+ * Words that ask a question without naming anything in the ledger.
  *
- * This closes the hole the rest of the file was written to avoid. Every
- * pattern above narrows a question; when none of them claims it, the fall
- * through used to hand it to the plain total — so "how much did I spend on
- * milk last month" answered with *everything* spent last month. A correct
- * number to a question nobody asked, which is the exact failure the decline
- * list exists to prevent, arriving by a different route.
+ * ## Why a vocabulary rather than more patterns
  *
- * "in" is deliberately absent: "in total", "in June" and "in the last 7 days"
- * are phrasing, not objects.
+ * The first version of this file tried patterns and, when none matched, fell
+ * through to the plain total. That made "how much did I spend on milk last
+ * month" answer with *everything* spent last month — the right number to a
+ * different question, which is indistinguishable from a right answer. The
+ * second version blocked a list of prepositions, which is the same
+ * brittleness one layer along: it only catches the objects somebody thought
+ * of in advance.
+ *
+ * So the test is inverted. A fastpath may claim a question only when it
+ * understands **every word in it**: the stock words below, plus whatever the
+ * matched pattern consumed — a category name, a period phrase, a shop.
+ * Anything left over means something was being asked about that this file
+ * cannot see, and the agent takes it.
+ *
+ * The consequence is deliberate: fastpaths claim fewer questions. Speed where
+ * the question is certain, and the slower path — which reaches line items and
+ * can ask what was meant — everywhere else.
  */
-const UNCLAIMED_OBJECT = /\b(?:on|for|about|at|from)\s+[a-z0-9]/;
+const STOCK_WORDS = new Set([
+  // Asking
+  'please', 'show', 'tell', 'give', 'me', 'my', 'mine', 'i', 'us', 'our', 'you',
+  'can', 'could', 'would', 'what', 'whats', 'which', 'how', 'much', 'many',
+  // Being
+  'is', 'are', 'am', 'was', 'were', 'be', 'been', 'do', 'does', 'did', 'have',
+  'has', 'had', 'get', 'got',
+  // Spending
+  'spend', 'spends', 'spent', 'spending', 'cost', 'costs', 'costed', 'pay',
+  'pays', 'paid', 'money', 'amount', 'amounts', 'total', 'totals', 'altogether',
+  'overall', 'all', 'so', 'far', 'up',
+  // Joining
+  'the', 'a', 'an', 'of', 'in', 'on', 'at', 'for', 'to', 'and', 'or', 'it',
+  'that', 'this', 'there', 'here', 'about',
+]);
+
+/**
+ * The words a question uses that nothing has accounted for.
+ *
+ * Empty means every word was either stock or consumed by the pattern that
+ * matched — which is the only state in which claiming the question is safe.
+ */
+function unaccountedWords(text: string, consumed: readonly string[] = []): string[] {
+  const known = new Set([...STOCK_WORDS, ...consumed]);
+  return text
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !known.has(word));
+}
 
 /** "at Countdown", "from New World" — everything to the end of the clause. */
 const MERCHANT_AT = /\b(?:at|from)\s+([a-z0-9''&.\- ]{2,40})$/;
@@ -162,7 +200,16 @@ export function matchFastpath(question: string, today: LocalDate): FastpathInten
   const phrase = parsePeriodPhrase(text, today);
   const rest = phrase ? phrase.rest : text;
 
-  if (BILL_COUNT.test(rest)) return { kind: 'bill_count', period: phrase };
+  // "How many bills this month" is a count; "how many bills for the dog" is
+  // not a question this file can answer, and the nouns it consumes say so.
+  if (BILL_COUNT.test(rest)) {
+    const left = unaccountedWords(rest, ['bills', 'bill', 'receipts', 'receipt', 'times', 'visits', 'shops', 'shop']);
+    return left.length === 0 ? { kind: 'bill_count', period: phrase } : null;
+  }
+
+  // These two are gated by distinctive multi-word phrases rather than by a
+  // single word, so an unrelated object cannot slip past them the way it
+  // could past a bare total.
   if (TOP_CATEGORY.test(rest)) return { kind: 'top_category', period: phrase };
   if (TOP_MERCHANT.test(rest)) return { kind: 'top_merchant', period: phrase };
 
@@ -171,7 +218,15 @@ export function matchFastpath(question: string, today: LocalDate): FastpathInten
   if (!SPENDING.test(rest)) return null;
 
   const category = findCategory(rest);
-  if (category) return { kind: 'category_spend', category, period: phrase };
+  if (category) {
+    // One category, and nothing else being asked about. "On dairy and meat"
+    // leaves `meat` over, and answering about dairy alone would be a quiet
+    // half-answer.
+    const left = unaccountedWords(rest, category.word.split(' '));
+    return left.length === 0
+      ? { kind: 'category_spend', category: category.category, period: phrase }
+      : null;
+  }
 
   const merchant = rest.replace(/[?.!]+$/, '').match(MERCHANT_AT);
   if (merchant) {
@@ -183,11 +238,9 @@ export function matchFastpath(question: string, today: LocalDate): FastpathInten
     }
   }
 
-  // Something was being asked *about*, and nothing above recognised it. The
-  // agent can — it reaches line items and can ask what was meant — so this is
-  // not a question about the total, however much it looks like one once the
-  // object is ignored.
-  if (UNCLAIMED_OBJECT.test(rest)) return null;
-
-  return { kind: 'total', period: phrase };
+  // The catch-all, and therefore the dangerous one. A plain total may only be
+  // claimed when every word has been accounted for — otherwise something was
+  // being asked about that this file cannot see, and the total would answer a
+  // different question with a number that looks right.
+  return unaccountedWords(rest).length === 0 ? { kind: 'total', period: phrase } : null;
 }
