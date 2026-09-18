@@ -34,6 +34,8 @@ import type {
 } from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
 import type { BreakdownDimension } from '@/app/insights/breakdown';
+import { trendCountFor, trendUnitFor } from '@/ui/calendar';
+import { DateRangeField } from '@/ui/components/date-range-field';
 import { DonutBreakdown } from '@/ui/components/donut-breakdown';
 import type { SliceInput } from '@/ui/chartSlices';
 import { EmptyState } from '@/ui/components/empty-state';
@@ -66,9 +68,23 @@ const RANGES = [
 
 type RangeKey = (typeof RANGES)[number]['value'];
 
-const RANGE_OPTIONS = RANGES.map(({ value, label }) => ({ value, label }));
+/**
+ * The presets, plus the one the calendar beside them sets.
+ *
+ * "Custom" is in this list rather than implied, so the left-hand control never
+ * reads "Last 3 months" while the charts show something a person picked by
+ * hand — two controls over one value have to agree on what it is.
+ */
+const RANGE_OPTIONS = [
+  ...RANGES.map(({ value, label }) => ({ value, label })),
+  // `as const`, or this one entry widens the whole array's `value` to
+  // `string` and it stops satisfying the menu's option type.
+  { value: 'custom' as const, label: 'Custom' },
+];
 
-function rangeOf(key: RangeKey) {
+type PeriodChoice = RangeKey | 'custom';
+
+function rangeOf(key: string) {
   return RANGES.find((range) => range.value === key) ?? RANGES[3];
 }
 
@@ -111,11 +127,22 @@ export default function InsightsScreen() {
    */
   const [mapDragging, setMapDragging] = useState(false);
 
-  const [range, setRange] = useState<RangeKey>('m3');
+  const [range, setRange] = useState<PeriodChoice>('m3');
+  /** The hand-picked range, kept even while a preset is in force. */
+  const [custom, setCustom] = useState<Period | null>(null);
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { unit, count } = rangeOf(range);
+
+  /**
+   * Choosing "Custom" with nothing picked yet starts from what is on screen,
+   * so the charts do not empty while waiting for two taps in a calendar.
+   */
+  const chooseRange = (next: PeriodChoice) => {
+    if (next === 'custom' && custom === null && data) setCustom(data.period);
+    setRange(next);
+  };
 
   const load = useCallback(async () => {
     const db = await getDb();
@@ -126,10 +153,22 @@ export default function InsightsScreen() {
     // rather than `getLatestMonth`.
     const dataRange = await getDataRange(db);
     const anchorDate = dataRange.lastBill ?? todayLocalDate();
+
+    // Null unless a hand-picked range is the one in force, which keeps the
+    // three lines below narrow enough for the type checker and honest about
+    // what is driving the screen.
+    const picked = range === 'custom' ? custom : null;
+
     const period =
-      unit === 'week'
-        ? periodOfLastWeeks(count, anchorDate)
-        : periodOfLastMonths(count, anchorDate);
+      picked ??
+      (unit === 'week' ? periodOfLastWeeks(count, anchorDate) : periodOfLastMonths(count, anchorDate));
+
+    // A preset carries its own unit — "last 4 weeks" is weekly by
+    // construction — while an arbitrary range has to be told, and its trend
+    // ends where the range does rather than at the newest bill in the ledger.
+    const trendUnit = picked ? trendUnitFor(picked) : unit;
+    const trendCount = picked ? trendCountFor(picked, trendUnit) : count;
+    const trendAnchor = picked ? picked.to : anchorDate;
 
     const [summary, breakdown, merchants, locations, trend] = await Promise.all([
       getSpendSummary(db, period),
@@ -138,14 +177,14 @@ export default function InsightsScreen() {
       // Eight is the point where pins in one suburb start to overlap more than
       // they inform; the donut below still covers the rest.
       getMerchantLocations(db, period, 8),
-      unit === 'week'
-        ? getWeeklyTrend(db, count, anchorDate).then((weeks) =>
+      trendUnit === 'week'
+        ? getWeeklyTrend(db, trendCount, trendAnchor).then((weeks) =>
             weeks.map((week) => ({
               label: formatDayMonth(week.weekStart),
               totalCents: week.totalCents,
             }))
           )
-        : getMonthlyTrend(db, count, monthOf(anchorDate)).then((months) =>
+        : getMonthlyTrend(db, trendCount, monthOf(trendAnchor)).then((months) =>
             months.map((month) => ({
               label: formatMonthShort(month.month),
               totalCents: month.totalCents,
@@ -161,10 +200,10 @@ export default function InsightsScreen() {
       trend,
       period,
       hasAnyBills: dataRange.lastBill !== null,
-      trendUnit: unit,
+      trendUnit,
     });
     setLoading(false);
-  }, [unit, count]);
+  }, [unit, count, range, custom]);
 
   useFocusEffect(
     useCallback(() => {
@@ -277,7 +316,32 @@ export default function InsightsScreen() {
       <ScrollView
         scrollEnabled={!mapDragging}
         contentContainerStyle={[styles.content, { paddingBottom: tabBarInset + Spacing.seven }]}>
-        <SelectMenu label="Period" options={RANGE_OPTIONS} value={range} onChange={setRange} />
+        {/*
+          One row, two ways to say the same thing: the ladder of presets on the
+          left for the common cases, a calendar on the right for everything
+          else. Picking dates switches the left-hand control to "Custom", so
+          the pair cannot disagree about what the charts are showing.
+        */}
+        <View style={styles.periodRow}>
+          <View style={styles.periodPreset}>
+            <SelectMenu
+              label="Period"
+              options={RANGE_OPTIONS}
+              value={range}
+              onChange={chooseRange}
+            />
+          </View>
+
+          <DateRangeField
+            label="Or pick dates"
+            value={custom}
+            onChange={(picked) => {
+              setCustom(picked);
+              setRange('custom');
+            }}
+            maxDate={todayLocalDate()}
+          />
+        </View>
 
         <ThemedText type="small" themeColor="textSecondary">
           {/* Whole days for a week range: "September 2026 – September 2026" is
@@ -459,6 +523,8 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.four, paddingTop: 0, gap: Spacing.four },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tiles: { flexDirection: 'row', gap: Spacing.three },
+  periodRow: { flexDirection: 'row', gap: Spacing.three },
+  periodPreset: { flex: 1 },
   section: { gap: Spacing.two, marginTop: Spacing.three },
   card: { borderRadius: Radius.medium, padding: Spacing.four, paddingRight: Spacing.two },
 });
