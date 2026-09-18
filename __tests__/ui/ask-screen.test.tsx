@@ -277,6 +277,68 @@ describe('reusing a question you sent', () => {
   });
 });
 
+/**
+ * §6.7's followup chips — the model's suggested next questions.
+ *
+ * The envelope has carried them since Week 7 and nothing drew them. What is
+ * worth pinning is which turn's chips are on screen: an older answer's
+ * suggestions would offer to ask about something scrolled past.
+ */
+describe('followup chips', () => {
+  const answered: AskMessage[] = [
+    { id: 'a', role: 'user', text: 'how much in June?' },
+    {
+      id: 'b',
+      role: 'assistant',
+      text: 'You spent $214.30 in June.',
+      envelope: { text: 'You spent $214.30 in June.', followups: ['And last month?', 'Which shop?'] },
+    },
+  ];
+
+  it('offers the suggestions from the answer on screen', async () => {
+    withState(answered);
+    await draw(<AskScreen />);
+
+    expect(screen.getByLabelText('Ask: And last month?')).toBeTruthy();
+    expect(screen.getByLabelText('Ask: Which shop?')).toBeTruthy();
+  });
+
+  it('asks the question when one is tapped', async () => {
+    withState(answered);
+    await draw(<AskScreen />);
+
+    await fireEvent.press(screen.getByLabelText('Ask: And last month?'));
+
+    expect(send).toHaveBeenCalledWith('And last month?');
+  });
+
+  /** Suggesting the next question before this one lands loses the answer. */
+  it('stays away while an answer is arriving', async () => {
+    withState(answered, true, 'You spent ');
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText(/^Ask: /)).toBeNull();
+  });
+
+  it('stays away while thinking', async () => {
+    withState(answered, true, '');
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText(/^Ask: /)).toBeNull();
+  });
+
+  /** Only the turn at the bottom: older chips point at a scrolled-past answer. */
+  it('drops the previous answer’s chips once a new question is asked', async () => {
+    withState([...answered, { id: 'c', role: 'user', text: 'and July?' }]);
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText(/^Ask: /)).toBeNull();
+  });
+
+  it('shows nothing when an answer suggested nothing', async () => {
+    withState([{ id: 'b', role: 'assistant', text: 'You spent $12.' }]);
+    await draw(<AskScreen />);
+    expect(screen.queryByLabelText(/^Ask: /)).toBeNull();
+  });
+});
+
 describe('asking', () => {
   it('sends the question and empties the box', async () => {
     withState([]);

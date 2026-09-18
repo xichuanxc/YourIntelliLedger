@@ -28,6 +28,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -169,6 +170,21 @@ export default function AskScreen() {
     void send(text);
   };
 
+  /**
+   * §6.7's followups, from the answer currently at the bottom.
+   *
+   * Only the latest one. Chips under an older answer would offer to ask about
+   * something the reader has scrolled past, and four of them per turn would
+   * leave a conversation more chip than content. They also stay away while an
+   * answer is arriving — suggesting the next question before this one has
+   * finished is a way to lose the answer.
+   */
+  const latest = messages[messages.length - 1];
+  const followups =
+    !thinking && streaming === '' && latest?.role === 'assistant'
+      ? (latest.envelope?.followups ?? [])
+      : [];
+
   const canSend = draft.trim() !== '' && !thinking;
 
   return (
@@ -301,6 +317,38 @@ export default function AskScreen() {
               accessibilityLabel="Answer, still arriving"
             />
           </View>
+        )}
+
+        {followups.length > 0 && (
+          /*
+            Horizontal, because a followup is a sentence and four of them do
+            not fit across a phone. `keyboardShouldPersistTaps` so a tap while
+            the keyboard is up sends the question rather than only dismissing
+            it — the same rule the conversation list follows.
+          */
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.followups}>
+            {followups.map((followup) => (
+              <Pressable
+                key={followup}
+                onPress={() => void send(followup)}
+                accessibilityRole="button"
+                accessibilityLabel={`Ask: ${followup}`}
+                style={({ pressed }) => [
+                  styles.followup,
+                  {
+                    backgroundColor: theme.backgroundElement,
+                    borderColor: theme.border,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}>
+                <ThemedText type="small">{followup}</ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
         )}
 
         <View
@@ -467,6 +515,16 @@ const styles = StyleSheet.create({
   streaming: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two },
   suggestions: { paddingHorizontal: Spacing.four, gap: Spacing.two, paddingBottom: Spacing.four },
   suggestion: {
+    minHeight: MinTouchTarget,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  // A row of its own above the composer, so the suggestions do not scroll
+  // away from the box they would be typed into.
+  followups: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two, gap: Spacing.two },
+  followup: {
     minHeight: MinTouchTarget,
     justifyContent: 'center',
     paddingHorizontal: Spacing.four,
