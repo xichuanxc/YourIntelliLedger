@@ -112,6 +112,22 @@ const TOP_CATEGORY = new RegExp(
 const TOP_MERCHANT =
   /\b(which|what)\s+(shop|store|supermarket|merchant)\b|\bwhere do i (shop|spend) (the )?most\b|\b(biggest|top|most visited)\s+(shop|store|merchant)\b/;
 
+/**
+ * An object the matcher did not understand — "on milk", "for nappies", "at
+ * somewhere it has never heard of".
+ *
+ * This closes the hole the rest of the file was written to avoid. Every
+ * pattern above narrows a question; when none of them claims it, the fall
+ * through used to hand it to the plain total — so "how much did I spend on
+ * milk last month" answered with *everything* spent last month. A correct
+ * number to a question nobody asked, which is the exact failure the decline
+ * list exists to prevent, arriving by a different route.
+ *
+ * "in" is deliberately absent: "in total", "in June" and "in the last 7 days"
+ * are phrasing, not objects.
+ */
+const UNCLAIMED_OBJECT = /\b(?:on|for|about|at|from)\s+[a-z0-9]/;
+
 /** "at Countdown", "from New World" — everything to the end of the clause. */
 const MERCHANT_AT = /\b(?:at|from)\s+([a-z0-9''&.\- ]{2,40})$/;
 
@@ -166,6 +182,12 @@ export function matchFastpath(question: string, today: LocalDate): FastpathInten
       return { kind: 'merchant_spend', term, period: phrase };
     }
   }
+
+  // Something was being asked *about*, and nothing above recognised it. The
+  // agent can — it reaches line items and can ask what was meant — so this is
+  // not a question about the total, however much it looks like one once the
+  // object is ignored.
+  if (UNCLAIMED_OBJECT.test(rest)) return null;
 
   return { kind: 'total', period: phrase };
 }

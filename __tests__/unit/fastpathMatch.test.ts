@@ -46,11 +46,13 @@ describe('categories', () => {
   });
 
   /**
-   * "Groceries" means the whole shop to most people. Mapping it to a category
-   * would answer a different question than the one asked.
+   * "Groceries" means the whole shop to most people, so it maps to no
+   * category — and it must not quietly become the *total* either. Answering
+   * "how much on groceries" with everything spent is right often enough to be
+   * dangerous and wrong whenever the ledger holds anything else.
    */
-  it('does not invent a category for "groceries"', () => {
-    expect(match('how much did I spend on groceries last month')).toMatchObject({ kind: 'total' });
+  it('declines "groceries" rather than inventing a category or a total', () => {
+    expect(match('how much did I spend on groceries last month')).toBeNull();
   });
 });
 
@@ -67,8 +69,8 @@ describe('merchants', () => {
   });
 
   /** "the supermarket" names no shop; the agent can ask which one. */
-  it('declines a generic place', () => {
-    expect(match('how much did I spend at the supermarket')).toMatchObject({ kind: 'total' });
+  it('declines a generic place instead of totalling everything', () => {
+    expect(match('how much did I spend at the supermarket')).toBeNull();
   });
 });
 
@@ -109,6 +111,42 @@ describe('month against month', () => {
     expect(match('this month vs last month')).toEqual({ kind: 'month_vs_month' });
     expect(match('how does this month compare to last month?')).toEqual({
       kind: 'month_vs_month',
+    });
+  });
+});
+
+/**
+ * The reported bug, and the class it belongs to.
+ *
+ * "How much did I cost on milk last month" understood the period, found a
+ * spending word, recognised neither a category nor a shop — and then the fall
+ * through claimed it as a plain total, answering with everything spent last
+ * month. The number was right and the question was not, which is
+ * indistinguishable to the person reading it.
+ */
+describe('a question about something it does not recognise', () => {
+  it('declines an item rather than answering with the total', () => {
+    expect(match('please show me how much did I cost on milk last month')).toBeNull();
+    expect(match('how much did I spend on milk')).toBeNull();
+    expect(match('what did I spend on nappies this month')).toBeNull();
+  });
+
+  /** The same question with no object is still a plain total. */
+  it('still claims the total when nothing is being asked about', () => {
+    expect(match('please show me how much did I cost in last month')).toMatchObject({
+      kind: 'total',
+    });
+    expect(match('how much did I spend last month')).toMatchObject({ kind: 'total' });
+    expect(match('how much have I spent in total')).toMatchObject({ kind: 'total' });
+  });
+
+  /** A recognised object still goes down its own path, not to the agent. */
+  it('leaves the categories and shops it does understand alone', () => {
+    expect(match('how much did I spend on dairy last month')).toMatchObject({
+      kind: 'category_spend',
+    });
+    expect(match('how much did I spend at Countdown last month')).toMatchObject({
+      kind: 'merchant_spend',
     });
   });
 });
