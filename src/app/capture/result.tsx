@@ -10,7 +10,7 @@
  */
 
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { Button } from '@/ui/components/button';
 import { EmptyState } from '@/ui/components/empty-state';
@@ -22,7 +22,7 @@ import { Radius, Spacing } from '@/ui/theme';
 
 export default function CaptureResultScreen() {
   const theme = useTheme();
-  const { result, reset, runParse, status, error } = useCaptureStore();
+  const { result, reset, runParse, status, error, separate, setSeparate } = useCaptureStore();
 
   if (!result) {
     return (
@@ -58,6 +58,29 @@ export default function CaptureResultScreen() {
             tone={withinBudget ? 'success' : 'warning'}
           />
         </View>
+
+        {/*
+          Only worth asking when there is more than one page. A continued
+          receipt and two separate ones look alike to the app, and guessing
+          wrong merges two shops into one bill — one merchant, one total, and
+          nothing on screen to say so.
+        */}
+        {result.pages.length > 1 && (
+          <View style={[styles.separate, { backgroundColor: theme.backgroundElement }]}>
+            <View style={styles.separateLabel}>
+              <ThemedText type="smallBold">These are separate receipts</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Leave off if this is one long receipt across {result.pages.length} pages. Turn on
+                to read each page as its own bill.
+              </ThemedText>
+            </View>
+            <Switch
+              value={separate}
+              onValueChange={setSeparate}
+              accessibilityLabel="These are separate receipts"
+            />
+          </View>
+        )}
 
         {result.pages.map((page) => (
           <View key={page.pageNo} style={styles.page}>
@@ -139,6 +162,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
   },
   stat: { gap: Spacing.half },
+  separate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.four,
+    padding: Spacing.four,
+    borderRadius: Radius.medium,
+  },
+  separateLabel: { flex: 1, gap: Spacing.half },
   page: { gap: Spacing.two },
   textBlock: { padding: Spacing.three, borderRadius: Radius.medium },
   actions: { gap: Spacing.three, marginTop: Spacing.three },

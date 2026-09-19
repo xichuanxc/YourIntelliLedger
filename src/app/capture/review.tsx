@@ -43,7 +43,7 @@ import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 
 export default function ReviewScreen() {
   const theme = useTheme();
-  const { parse, result, reset } = useCaptureStore();
+  const { parse, result, reset, queue, batchTotal, nextReceipt } = useCaptureStore();
   const refreshLedger = useLedgerStore((state) => state.refresh);
   const scroll = useRef<ScrollView>(null);
 
@@ -170,6 +170,15 @@ export default function ReviewScreen() {
       });
 
       await refreshLedger();
+
+      // More pages from the same scan, each its own receipt: stay here and
+      // review the next rather than dropping the user into the bill they just
+      // saved and making them find their way back.
+      if (queue.length > 0) {
+        await nextReceipt();
+        return;
+      }
+
       reset();
       router.dismissTo(`/bill/${billId}`);
     } catch (error) {
@@ -334,6 +343,12 @@ export default function ReviewScreen() {
           </>
         )}
 
+        {batchTotal > 1 && (
+          <ThemedText type="small" themeColor="textSecondary" style={styles.batch}>
+            Receipt {batchTotal - queue.length} of {batchTotal}
+          </ThemedText>
+        )}
+
         <View style={styles.actions}>
           <Button
             label="Discard"
@@ -352,7 +367,12 @@ export default function ReviewScreen() {
               ])
             }
           />
-          <Button label="Save bill" onPress={save} busy={saving} style={styles.saveButton} />
+          <Button
+            label={queue.length > 0 ? 'Save and next' : 'Save bill'}
+            onPress={save}
+            busy={saving}
+            style={styles.saveButton}
+          />
         </View>
       </ScrollView>
     </Screen>
@@ -498,4 +518,5 @@ const styles = StyleSheet.create({
   editorRow: { flexDirection: 'row', gap: Spacing.three },
   actions: { flexDirection: 'row', gap: Spacing.three, marginTop: Spacing.four },
   saveButton: { flex: 1 },
+  batch: { textAlign: 'center' },
 });

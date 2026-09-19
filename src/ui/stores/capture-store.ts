@@ -41,6 +41,24 @@ async function encodePages(pages: CaptureResult['pages']): Promise<ParseImage[]>
   return images;
 }
 
+/**
+ * One capture per page.
+ *
+ * Splitting here rather than downstream is what keeps this feature small:
+ * parse, review and save need no knowledge of batches, because each of them
+ * sees an ordinary single-page capture. The image, the cached OCR text
+ * (§4.6) and the page numbering all follow without a special case.
+ */
+function splitByPage(result: CaptureResult): CaptureResult[] {
+  return result.pages.map((page) => ({
+    ...result,
+    // Renumbered to 1: images live at receipts/{bill_id}/{page_no}.jpg, and
+    // each of these is the first page of its own bill.
+    pages: [{ ...page, pageNo: 1 }],
+    text: page.text,
+  }));
+}
+
 export type CaptureStatus =
   | 'idle'
   | 'acquiring'
@@ -58,6 +76,21 @@ interface CaptureState {
   error: string | null;
   /** Set when the primary scanner was unavailable and a fallback was used. */
   fellBackFromScanner: boolean;
+  /**
+   * Whether a multi-page scan holds several receipts rather than one long one.
+   *
+   * Asked rather than guessed. A continued receipt and two separate ones look
+   * alike to the app, and merging two shops into one bill is silent: one
+   * merchant, one total, and a plausible-looking row in the ledger.
+   */
+  separate: boolean;
+  setSeparate: (value: boolean) => void;
+  /** Captures still to be parsed and reviewed, when the scan held several. */
+  queue: CaptureResult[];
+  /** How many receipts this scan produced; 0 when it was a single one. */
+  batchTotal: number;
+  /** Loads and parses the next queued receipt, or ends the batch. */
+  nextReceipt: () => Promise<'parsed' | 'done' | 'failed'>;
 
   runPipeline: (uris: string[], path: CapturePath) => Promise<void>;
   startScan: () => Promise<'done' | 'cancelled' | 'needs-camera-fallback'>;
@@ -91,18 +124,54 @@ export const useCaptureStore = create<CaptureState>((set) => ({
   parse: null,
   error: null,
   fellBackFromScanner: false,
+  separate: false,
+  queue: [],
+  batchTotal: 0,
+
+  setSeparate: (value: boolean) => set({ separate: value }),
 
   reset: () =>
-    set({ status: 'idle', result: null, parse: null, error: null, fellBackFromScanner: false }),
+    set({
+      status: 'idle',
+      result: null,
+      parse: null,
+      error: null,
+      fellBackFromScanner: false,
+      separate: false,
+      queue: [],
+      batchTotal: 0,
+    }),
+
+  nextReceipt: async (): Promise<'parsed' | 'done' | 'failed'> => {
+    const [next, ...rest] = useCaptureStore.getState().queue;
+    if (!next) {
+      useCaptureStore.getState().reset();
+      return 'done';
+    }
+
+    // `status: 'ready'` and a cleared parse, so the review screen is not
+    // briefly showing the receipt that was just saved.
+    set({ result: next, queue: rest, parse: null, error: null, status: 'ready' });
+    return useCaptureStore.getState().runParse();
+  },
 
   /**
    * Sends the reconstructed text to the model. Failure is not fatal — §5.5
    * falls back to manual entry, so the error is surfaced and the raw text
    * stays available rather than the capture being thrown away.
    */
-  runParse: async () => {
-    const { result } = useCaptureStore.getState();
+  runParse: async (): Promise<'parsed' | 'failed'> => {
+    const { result, separate } = useCaptureStore.getState();
     if (!result) return 'failed';
+
+    // A scan the user said holds several receipts becomes several captures.
+    // Only ever splits once: afterwards the live capture is a single page, so
+    // parsing the queued ones comes back through here harmlessly.
+    if (separate && result.pages.length > 1) {
+      const [first, ...rest] = splitByPage(result);
+      set({ result: first, queue: rest, batchTotal: rest.length + 1 });
+      return useCaptureStore.getState().runParse();
+    }
 
     set({ status: 'parsing', error: null });
     const startedAt = Date.now();
