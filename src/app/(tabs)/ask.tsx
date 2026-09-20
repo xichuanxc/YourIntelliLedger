@@ -341,6 +341,7 @@ export default function AskScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            style={styles.followupsRow}
             contentContainerStyle={styles.followups}>
             {followups.map((followup) => (
               <Pressable
@@ -535,6 +536,16 @@ const styles = StyleSheet.create({
   },
   // A row of its own above the composer, so the suggestions do not scroll
   // away from the box they would be typed into.
+  /**
+   * The row takes only the height its chips need.
+   *
+   * A horizontal ScrollView inside a column stretches to fill whatever space
+   * is left on its cross axis, so without this it claimed everything between
+   * the conversation and the composer — half the screen for one line of
+   * pills. Making the pills smaller could never have fixed that: the
+   * container was never sized to them.
+   */
+  followupsRow: { flexGrow: 0, flexShrink: 0 },
   followups: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.two,
