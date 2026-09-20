@@ -155,7 +155,19 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
    * be read is a picture of numbers with no names on them.
    */
   const LONG_LABEL = 6;
-  const rotated = points.some((point) => point.label.length > LONG_LABEL);
+  const longest = points.reduce((most, point) => Math.max(most, point.label.length), 0);
+  const rotated = longest > LONG_LABEL;
+
+  /**
+   * The label's own slot, wide enough to hold it.
+   *
+   * The ellipsis was never ours — the library draws each label in a
+   * fixed-width slot and clips what does not fit, which tilting alone did not
+   * change. Estimated from the character count at this font size, because
+   * there is no text measurement available here; a proportional face makes
+   * this approximate rather than exact, so the cap is generous.
+   */
+  const labelWidth = Math.min(112, Math.max(44, Math.round(longest * 6)));
 
   const shared = {
     width: chartWidth,
@@ -163,9 +175,12 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
     // Tilted only when something needs it: rotating "Sep" and "Oct" would add
     // an angle to read for nothing.
     rotateLabel: rotated,
-    // Rotated text runs below the axis and is otherwise clipped by the
-    // chart's own height.
-    labelsExtraHeight: rotated ? 28 : 0,
+    labelWidth: rotated ? labelWidth : undefined,
+    // One line: a rotated label that wrapped would read as two labels.
+    xAxisTextNumberOfLines: 1,
+    // A tilted label runs diagonally, so the room it needs below the axis
+    // grows with its length — otherwise the chart's own height crops it.
+    labelsExtraHeight: rotated ? Math.min(64, Math.round(labelWidth * 0.7)) : 0,
     maxValue: max,
     noOfSections: SECTIONS,
     yAxisLabelTexts: axisLabels(step, plan.money, currency),
