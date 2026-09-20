@@ -11,7 +11,7 @@
  * country.
  */
 
-import { fitPoints, panCentre, placePoints } from '@/maps/fit';
+import { fitPoints, panCentre, placePoints, touchDistance, zoomStepsFor } from '@/maps/fit';
 import { DEFAULT_ZOOM, type LonLat } from '@/maps/tiles';
 
 const HAMILTON: LonLat = { lat: -37.787, lon: 175.279 };
@@ -136,5 +136,42 @@ describe('panning', () => {
     const close = Math.abs(panCentre(HAMILTON, 16, 100, 0).lon - HAMILTON.lon);
 
     expect(close).toBeLessThan(far);
+  });
+});
+
+/**
+ * Pinching. A zoom level doubles the scale, so the gesture maps onto whole
+ * steps through a base-2 logarithm — and the rounding is what keeps a pinch
+ * from re-fetching tiles on every frame.
+ */
+describe('pinch to zoom', () => {
+  it('measures the gap between two fingers', () => {
+    expect(touchDistance({ pageX: 0, pageY: 0 }, { pageX: 3, pageY: 4 })).toBe(5);
+  });
+
+  it('is zero while the fingers have not moved', () => {
+    expect(zoomStepsFor(200, 200)).toBe(0);
+  });
+
+  it('counts one level in when the fingers double their distance', () => {
+    expect(zoomStepsFor(100, 200)).toBe(1);
+    expect(zoomStepsFor(100, 400)).toBe(2);
+  });
+
+  it('counts one level out when they halve it', () => {
+    expect(zoomStepsFor(200, 100)).toBe(-1);
+    expect(zoomStepsFor(400, 100)).toBe(-2);
+  });
+
+  /** A small spread is not a zoom; it is a hand that moved. */
+  it('ignores a spread too small to be a step', () => {
+    expect(zoomStepsFor(200, 220)).toBe(0);
+    expect(zoomStepsFor(200, 185)).toBe(0);
+  });
+
+  /** A gesture that starts before a measurement exists must not jump. */
+  it('has no opinion about a zero distance', () => {
+    expect(zoomStepsFor(0, 200)).toBe(0);
+    expect(zoomStepsFor(200, 0)).toBe(0);
   });
 });

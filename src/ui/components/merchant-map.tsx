@@ -2,10 +2,10 @@
  * Where a period's money was spent, on a map (§4.14).
  *
  * Built the same way as the bill preview: OpenStreetMap raster tiles laid out
- * as plain images, with no map SDK and no API key. It drags to pan and steps
- * through whole zoom levels from a fitted view — no pinch, no rotation, no
- * tilt, so a native map view would still be paying for a great deal this
- * screen never uses.
+ * as plain images, with no map SDK and no API key. It drags to pan, pinches
+ * to zoom and steps through whole zoom levels from a fitted view — no
+ * rotation, no tilt, no clustering, so a native map view would still be
+ * paying for a great deal this screen never uses.
  *
  * The drag claims the gesture from the Insights `ScrollView` the moment a
  * finger lands, so the page does not scroll while the map is being touched.
@@ -55,7 +55,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 
 import { formatMoney, formatMoneyCompact } from '@/data/money';
-import { fitPoints, panCentre, placePoints } from '@/maps/fit';
+import { fitPoints, panCentre, placePoints, touchDistance, zoomStepsFor } from '@/maps/fit';
 import { geocode, type GeoPoint } from '@/maps/geocode';
 import { readCache, writeCache } from '@/maps/geocodeCache';
 import { mergeSpots } from '@/maps/spots';
@@ -93,6 +93,18 @@ const MAX_PIN = 38;
  */
 const MIN_MAP_ZOOM = 3;
 const MAX_MAP_ZOOM = 18;
+
+/**
+ * How far a finger may drift and still count as a tap.
+ *
+ * Without it the map takes the gesture at the first pixel of movement, and a
+ * finger never holds perfectly still — which cancelled the zoom buttons
+ * mid-press rather than covering them.
+ */
+const TAP_SLOP = 3;
+
+/** Far enough either way that pinching back is never a long journey. */
+const clampOffset = (value: number) => Math.max(-12, Math.min(12, value));
 
 /**
  * Pins are drawn through rather than solid, so a shop behind another is still
@@ -157,7 +169,11 @@ export function MerchantMap({
    */
   const centreRef = useRef<LonLat>({ lat: 0, lon: 0 });
   const zoomRef = useRef(DEFAULT_ZOOM);
-  const dragFrom = useRef<LonLat | null>(null);
+  /** Where the drag began, and the gesture offsets it started from. */
+  const dragFrom = useRef<{ centre: LonLat; dx: number; dy: number } | null>(null);
+  /** The spread and zoom a two-finger gesture began at. */
+  const pinch = useRef<{ distance: number; offset: number } | null>(null);
+  const zoomOffsetRef = useRef(0);
   /** Through a ref, so the responder does not need rebuilding when it changes. */
   const onDragChangeRef = useRef(onDragChange);
 
@@ -190,8 +206,17 @@ export function MerchantMap({
        * zoom buttons still take their own taps.
        */
       onStartShouldSetPanResponder: () => true,
-      // Still needed for a gesture that began on a child and was released.
-      onMoveShouldSetPanResponder: () => true,
+      /**
+       * On movement, only a real drag.
+       *
+       * This said `() => true`, which took the gesture away from whatever
+       * child was being pressed at the first pixel of drift. `Pressable`
+       * grants a termination request by default, so the zoom buttons were
+       * being cancelled mid-tap — they were never covered, they were
+       * interrupted.
+       */
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > TAP_SLOP || Math.abs(gesture.dy) > TAP_SLOP,
       /**
        * And never hand it back. Without this the scroll view can ask for the
        * responder mid-drag and get it, which is the same bug arriving a few
@@ -199,19 +224,51 @@ export function MerchantMap({
        */
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
-        dragFrom.current = centreRef.current;
+        dragFrom.current = { centre: centreRef.current, dx: 0, dy: 0 };
+        pinch.current = null;
         onDragChangeRef.current?.(true);
       },
-      onPanResponderMove: (_event, gesture) => {
+      onPanResponderMove: (event, gesture) => {
+        const touches = event.nativeEvent.touches;
+
+        if (touches.length >= 2) {
+          const spread = touchDistance(touches[0], touches[1]);
+          if (!pinch.current) {
+            // A second finger has just landed: remember where it began, and
+            // do not move the map on the frame that starts the pinch.
+            pinch.current = { distance: spread, offset: zoomOffsetRef.current };
+            return;
+          }
+          setZoomOffset(
+            clampOffset(pinch.current.offset + zoomStepsFor(pinch.current.distance, spread))
+          );
+          return;
+        }
+
+        if (pinch.current) {
+          // Back to one finger. `dx`/`dy` still count from the original touch
+          // down, so the drag re-anchors here — otherwise the map jumps by
+          // however far the hand travelled while pinching.
+          pinch.current = null;
+          dragFrom.current = { centre: centreRef.current, dx: gesture.dx, dy: gesture.dy };
+          return;
+        }
+
         const from = dragFrom.current;
-        if (from) setCentre(panCentre(from, zoomRef.current, gesture.dx, gesture.dy));
+        if (from) {
+          setCentre(
+            panCentre(from.centre, zoomRef.current, gesture.dx - from.dx, gesture.dy - from.dy)
+          );
+        }
       },
       onPanResponderRelease: () => {
         dragFrom.current = null;
+        pinch.current = null;
         onDragChangeRef.current?.(false);
       },
       onPanResponderTerminate: () => {
         dragFrom.current = null;
+        pinch.current = null;
         onDragChangeRef.current?.(false);
       },
     })
@@ -287,8 +344,9 @@ export function MerchantMap({
   useEffect(() => {
     if (focus) centreRef.current = focus;
     zoomRef.current = zoom;
+    zoomOffsetRef.current = zoomOffset;
     onDragChangeRef.current = onDragChange;
-  }, [focus, zoom, onDragChange]);
+  }, [focus, zoom, zoomOffset, onDragChange]);
 
   // `focus` is non-null whenever `view` is; the second test is for the type
   // checker rather than for the running app.

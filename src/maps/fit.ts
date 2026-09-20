@@ -115,6 +115,33 @@ export function panCentre(centre: LonLat, zoom: number, dx: number, dy: number):
   return unproject({ x: origin.x - dx / TILE_SIZE, y: origin.y - dy / TILE_SIZE }, zoom);
 }
 
+/** How far apart two fingers are, in screen pixels. */
+export function touchDistance(
+  a: { pageX: number; pageY: number },
+  b: { pageX: number; pageY: number }
+): number {
+  return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
+}
+
+/**
+ * Whole zoom steps a pinch represents.
+ *
+ * A zoom level doubles the scale, so the natural mapping is the base-2
+ * logarithm of how much the fingers spread: twice as far apart is one level
+ * in. Rounded, because this map zooms in whole steps — a continuous scale
+ * would mean re-fetching tiles for every frame of the gesture and blurring
+ * them in between.
+ */
+export function zoomStepsFor(from: number, to: number): number {
+  if (!(from > 0) || !(to > 0)) return 0;
+
+  const steps = Math.round(Math.log2(to / from));
+  // `Math.round` of a small negative is -0, and -0 is not 0 under `Object.is`
+  // — which is what `toBe` and a good many equality checks use. Handing one
+  // out of a public function is a trap for whoever compares against it next.
+  return steps === 0 ? 0 : steps;
+}
+
 /**
  * Where each point sits in a viewport of `width` × `height` centred on
  * `centre` at `zoom`, in pixels from the top-left.
