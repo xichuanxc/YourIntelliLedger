@@ -147,9 +147,25 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
   // on what the chart already shows.
   const colour = paletteFor(scheme)[0];
 
+  /**
+   * Longer than this and a label cannot sit under a bar on a phone.
+   *
+   * The library clips rather than wraps, so "pantry staple" and "Chemist
+   * Warehouse" arrive as "pantry…" or as nothing — a chart whose axis cannot
+   * be read is a picture of numbers with no names on them.
+   */
+  const LONG_LABEL = 6;
+  const rotated = points.some((point) => point.label.length > LONG_LABEL);
+
   const shared = {
     width: chartWidth,
     height: 160,
+    // Tilted only when something needs it: rotating "Sep" and "Oct" would add
+    // an angle to read for nothing.
+    rotateLabel: rotated,
+    // Rotated text runs below the axis and is otherwise clipped by the
+    // chart's own height.
+    labelsExtraHeight: rotated ? 28 : 0,
     maxValue: max,
     noOfSections: SECTIONS,
     yAxisLabelTexts: axisLabels(step, plan.money, currency),

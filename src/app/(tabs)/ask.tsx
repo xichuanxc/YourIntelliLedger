@@ -113,7 +113,15 @@ export default function AskScreen() {
   // A new answer is at the bottom, and an answer nobody scrolls to is an
   // answer nobody read.
   useEffect(() => {
-    if (messages.length > 0) list.current?.scrollToEnd({ animated: true });
+    if (messages.length === 0) return;
+
+    // A frame later, not immediately. The list re-lays-out when the keyboard
+    // changes its height, and scrolling before that happens measures the old
+    // viewport — which leaves a tall message, a chart most often, still
+    // underneath the composer.
+    const frame = requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
+    return () => cancelAnimationFrame(frame);
+
     // `streaming` too: an answer that grows past the fold while the user
     // watches should keep its last line in view.
     //
@@ -307,6 +315,14 @@ export default function AskScreen() {
             ref={list}
             data={messages}
             keyExtractor={(message) => message.id}
+            onContentSizeChange={() => {
+              // A chart measures after its message has been laid out, so the
+              // content grows a second time. While the keyboard is up, that
+              // second growth is exactly what pushes an answer out of sight.
+              // Only then, so it cannot yank the list away from someone
+              // reading back through the conversation.
+              if (keyboardShown) list.current?.scrollToEnd({ animated: false });
+            }}
             // `flex: 1`, or the list sizes to its content: a long conversation
             // then grows past the space available and pushes its newest
             // messages behind the composer instead of scrolling inside it.
