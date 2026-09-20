@@ -102,8 +102,17 @@ export default function CaptureResultScreen() {
         )}
 
         <View style={styles.actions}>
+          {/*
+            The label says what is about to happen, because nothing else on
+            this screen did. "Read this receipt" while two shops were about to
+            go into one request gave no hint that the switch above mattered.
+          */}
           <Button
-            label="Read this receipt"
+            label={
+              separate && result.pages.length > 1
+                ? `Read ${result.pages.length} receipts, one at a time`
+                : 'Read this receipt'
+            }
             onPress={async () => {
               if ((await runParse()) === 'parsed') router.replace('/capture/review');
             }}

@@ -18,6 +18,7 @@ import { getDb } from '@/data/db';
 import { getVisionParse } from '@/data/prefs';
 import { logQuery, type QueryLogEntry } from '@/data/telemetryRepo';
 import { processCapture, type CaptureResult } from '@/capture/pipeline';
+import { splitByPage } from '@/capture/splitPages';
 import { parseReceipt, type ParseOutcome } from '@/capture/parseReceipt';
 import {
   pickFromGallery,
@@ -39,24 +40,6 @@ async function encodePages(pages: CaptureResult['pages']): Promise<ParseImage[]>
     images.push({ base64: await encodeImageBase64(page.image.uri), mimeType: 'image/jpeg' });
   }
   return images;
-}
-
-/**
- * One capture per page.
- *
- * Splitting here rather than downstream is what keeps this feature small:
- * parse, review and save need no knowledge of batches, because each of them
- * sees an ordinary single-page capture. The image, the cached OCR text
- * (§4.6) and the page numbering all follow without a special case.
- */
-function splitByPage(result: CaptureResult): CaptureResult[] {
-  return result.pages.map((page) => ({
-    ...result,
-    // Renumbered to 1: images live at receipts/{bill_id}/{page_no}.jpg, and
-    // each of these is the first page of its own bill.
-    pages: [{ ...page, pageNo: 1 }],
-    text: page.text,
-  }));
 }
 
 export type CaptureStatus =
