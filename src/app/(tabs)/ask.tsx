@@ -190,6 +190,29 @@ export default function AskScreen() {
    * answer is arriving — suggesting the next question before this one has
    * finished is a way to lose the answer.
    */
+  /**
+   * Whether the followup row has more chips off either edge.
+   *
+   * The measurements live in refs and only the two booleans are state: a
+   * horizontal scroll fires many times a second, and re-rendering the screen
+   * on each frame to move two chevrons would be a poor trade. Written in
+   * event handlers, never during render.
+   */
+  const rowOffset = useRef(0);
+  const rowWidth = useRef(0);
+  const rowContent = useRef(0);
+  const [rowEdges, setRowEdges] = useState({ left: false, right: false });
+
+  const measureRow = () => {
+    // A couple of pixels of slack, or rounding leaves an arrow showing at a
+    // scroll end that has already been reached.
+    const left = rowOffset.current > 2;
+    const right = rowOffset.current + rowWidth.current < rowContent.current - 2;
+    setRowEdges((current) =>
+      current.left === left && current.right === right ? current : { left, right }
+    );
+  };
+
   const latest = messages[messages.length - 1];
   const followups =
     !thinking && streaming === '' && latest?.role === 'assistant'
@@ -337,11 +360,24 @@ export default function AskScreen() {
             the keyboard is up sends the question rather than only dismissing
             it — the same rule the conversation list follows.
           */
+          <View style={styles.followupsRow}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            style={styles.followupsRow}
+            scrollEventThrottle={32}
+            onScroll={(event) => {
+              rowOffset.current = event.nativeEvent.contentOffset.x;
+              measureRow();
+            }}
+            onLayout={(event) => {
+              rowWidth.current = event.nativeEvent.layout.width;
+              measureRow();
+            }}
+            onContentSizeChange={(width) => {
+              rowContent.current = width;
+              measureRow();
+            }}
             contentContainerStyle={styles.followups}>
             {followups.map((followup) => (
               <Pressable
@@ -362,6 +398,34 @@ export default function AskScreen() {
               </Pressable>
             ))}
           </ScrollView>
+
+          {/*
+            Shown only when there is somewhere to go. Always-on arrows would
+            claim there is more to see when three chips already fit. The sliver
+            takes the screen's own colour, so a half-scrolled chip fades under
+            it rather than being cut through the middle of a word.
+          */}
+          {rowEdges.left && (
+            <View
+              pointerEvents="none"
+              accessible={false}
+              style={[styles.followupEdge, styles.followupEdgeLeft, { backgroundColor: theme.background }]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                ‹
+              </ThemedText>
+            </View>
+          )}
+          {rowEdges.right && (
+            <View
+              pointerEvents="none"
+              accessible={false}
+              style={[styles.followupEdge, styles.followupEdgeRight, { backgroundColor: theme.background }]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </View>
+          )}
+          </View>
         )}
 
         <View
@@ -546,6 +610,16 @@ const styles = StyleSheet.create({
    * container was never sized to them.
    */
   followupsRow: { flexGrow: 0, flexShrink: 0 },
+  followupEdge: {
+    position: 'absolute',
+    top: 0,
+    bottom: Spacing.two,
+    width: Spacing.five,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  followupEdgeLeft: { left: 0 },
+  followupEdgeRight: { right: 0 },
   followups: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.two,
