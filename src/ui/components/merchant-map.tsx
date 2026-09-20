@@ -394,12 +394,22 @@ export function MerchantMap({
         />
       ))}
 
-      {spots.map((spot, index) => {
+      {/*
+        Drawn smallest first, so the biggest spend ends up on top.
+        `mergeSpots` orders by amount descending — right for the data, and
+        exactly backwards for painting, since React Native draws later
+        siblings over earlier ones. Reversed here rather than sorted there,
+        and by render order rather than `zIndex`, which is unreliable between
+        siblings on Android.
+      */}
+      {spots
+        .map((spot, index) => ({ spot, at: placements[index] }))
+        .sort((a, b) => a.spot.totalCents - b.spot.totalCents)
+        .map(({ spot, at }) => {
         // Area with the value, so the dot reads proportionally: doubling the
         // spend doubles the ink, not the width.
         const share = Math.sqrt(spot.totalCents / largest);
         const size = MIN_PIN + (MAX_PIN - MIN_PIN) * share;
-        const at = placements[index];
         // The colour on the shop's own sign, where it is a chain this app
         // recognises — see `merchantBrand`.
         const colour = brandColour(spot.merchantNorm, spot.label);
@@ -434,13 +444,18 @@ export function MerchantMap({
             />
 
             {/*
-              The amount, compact and on a chip. `pointerEvents="none"` so the
-              label never swallows a tap meant for the pin under it.
+              The shop and what went through it. `pointerEvents="none"` so the
+              label never swallows a tap meant for the pin under it, and the
+              name is held to one line — a long shop name would otherwise be
+              wider than the map it sits on.
             */}
             <View
               pointerEvents="none"
-              style={[styles.amount, { backgroundColor: theme.background, borderColor: theme.border }]}>
-              <ThemedText type="small" style={styles.amountText}>
+              style={[styles.label, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <ThemedText type="small" numberOfLines={1} style={styles.labelName}>
+                {spot.label}
+              </ThemedText>
+              <ThemedText type="small" style={styles.labelAmount}>
                 {formatMoneyCompact(spot.totalCents, currency)}
               </ThemedText>
             </View>
@@ -543,14 +558,19 @@ const styles = StyleSheet.create({
   // Anchored on the place; the pin and its label position themselves around it.
   spot: { position: 'absolute', alignItems: 'center' },
   pin: { borderWidth: 2 },
-  amount: {
+  label: {
     marginTop: 1,
     paddingHorizontal: Spacing.one,
     borderRadius: Radius.small,
     borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.92,
+    opacity: 0.94,
+    alignItems: 'center',
+    // Wide enough for a shop name at this size, narrow enough that two
+    // neighbouring labels do not cover the map between them.
+    maxWidth: 104,
   },
-  amountText: { fontSize: 10, fontVariant: ['tabular-nums'] },
+  labelName: { fontSize: 9 },
+  labelAmount: { fontSize: 10, fontVariant: ['tabular-nums'] },
   resolving: { position: 'absolute', left: Spacing.two, top: Spacing.two },
   zoom: { position: 'absolute', right: Spacing.two, top: Spacing.two, gap: Spacing.one },
   zoomButton: {
