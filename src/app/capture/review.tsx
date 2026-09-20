@@ -175,7 +175,12 @@ export default function ReviewScreen() {
       // review the next rather than dropping the user into the bill they just
       // saved and making them find their way back.
       if (queue.length > 0) {
-        await nextReceipt();
+        // The bill just saved is safe either way. If the next one cannot be
+        // read — a provider busy mid-batch, most likely — this screen would
+        // otherwise render "nothing to review" with the remaining pages
+        // stranded in the queue. The result screen shows that page and can
+        // retry it.
+        if ((await nextReceipt()) !== 'parsed') router.replace('/capture/result');
         return;
       }
 

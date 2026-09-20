@@ -168,9 +168,21 @@ export const useCaptureStore = create<CaptureState>((set) => ({
     // Only ever splits once: afterwards the live capture is a single page, so
     // parsing the queued ones comes back through here harmlessly.
     if (separate && result.pages.length > 1) {
-      const [first, ...rest] = splitByPage(result);
+      const whole = result;
+      const [first, ...rest] = splitByPage(whole);
       set({ result: first, queue: rest, batchTotal: rest.length + 1 });
-      return useCaptureStore.getState().runParse();
+
+      const outcome = await useCaptureStore.getState().runParse();
+      if (outcome !== 'parsed') {
+        // Put the scan back the way it was found. Leaving the split in place
+        // after a failed parse showed the result screen a one-page capture —
+        // "Pages: 1", the other page's text gone, the separate-receipts switch
+        // vanished with it — while the rest sat invisibly in the queue. A
+        // provider being busy for a moment should cost a retry, not the view
+        // of what was scanned.
+        set({ result: whole, queue: [], batchTotal: 0 });
+      }
+      return outcome;
     }
 
     set({ status: 'parsing', error: null });
