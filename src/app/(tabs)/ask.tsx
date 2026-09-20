@@ -46,6 +46,17 @@ import { useAskStore, type AskMessage } from '@/ui/stores/ask-store';
 import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 
 /**
+ * Followup chips are hints, not buttons, so they are drawn as small pills
+ * rather than at the 44pt touch minimum — four button-sized chips above the
+ * composer read as a wall of controls and crowd out the conversation.
+ *
+ * §7's touch target is not given up for that: `hitSlop` puts the missing
+ * height back, so the pill is smaller to look at and the same size to hit.
+ */
+const FOLLOWUP_HEIGHT = 30;
+const FOLLOWUP_SLOP = (MinTouchTarget - FOLLOWUP_HEIGHT) / 2;
+
+/**
  * How much of the bottom of the screen the keyboard is covering, in points.
  *
  * Two separate needs, hence a height rather than a boolean.
@@ -337,6 +348,7 @@ export default function AskScreen() {
                 onPress={() => void send(followup)}
                 accessibilityRole="button"
                 accessibilityLabel={`Ask: ${followup}`}
+                hitSlop={{ top: FOLLOWUP_SLOP, bottom: FOLLOWUP_SLOP }}
                 style={({ pressed }) => [
                   styles.followup,
                   {
@@ -523,12 +535,17 @@ const styles = StyleSheet.create({
   },
   // A row of its own above the composer, so the suggestions do not scroll
   // away from the box they would be typed into.
-  followups: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.two, gap: Spacing.two },
-  followup: {
-    minHeight: MinTouchTarget,
-    justifyContent: 'center',
+  followups: {
     paddingHorizontal: Spacing.four,
-    borderRadius: Radius.large,
+    paddingBottom: Spacing.two,
+    gap: Spacing.two,
+    alignItems: 'center',
+  },
+  followup: {
+    height: FOLLOWUP_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: FOLLOWUP_HEIGHT / 2,
     borderWidth: StyleSheet.hairlineWidth,
   },
   thinking: {
