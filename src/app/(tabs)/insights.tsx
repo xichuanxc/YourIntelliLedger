@@ -9,6 +9,7 @@ import {
   formatMonth,
   formatMonthShort,
   monthOf,
+  addDays,
   periodOfLastMonths,
   periodOfLastWeeks,
   todayLocalDate,
@@ -25,7 +26,13 @@ import {
   getWeeklyTrend,
 } from '@/data/insightsRepo';
 import { formatMoney, formatMoneyCompact } from '@/data/money';
-import { getMapPreviews } from '@/data/prefs';
+import {
+  getInsightsCustom,
+  getInsightsRange,
+  getMapPreviews,
+  setInsightsCustom,
+  setInsightsRange,
+} from '@/data/prefs';
 import type {
   CategoryBreakdown,
   MerchantLocation,
@@ -52,21 +59,36 @@ import { MaxContentWidth, Radius, Spacing } from '@/ui/theme';
  * The periods on offer.
  *
  * A ladder rather than a set: each step is roughly three times the last, so
- * six options cover a week to a year without two of them answering the same
+ * these cover a week to a year without two of them answering the same
  * question. The unit is part of the range, not a second control — "last 4
  * weeks" and "last 3 months" are one choice for the user, and splitting them
  * into a unit and a count would make picking a period a two-step job.
+ *
+ * `shift` is what makes "Last week" a different *kind* of period from the
+ * rest. The others are trailing windows ending now; this one is the previous
+ * whole week, so its anchor moves back before the window is taken.
  */
 const RANGES = [
   { value: 'w1', label: 'This week', unit: 'week', count: 1 },
+  { value: 'wl', label: 'Last week', unit: 'week', count: 1, shift: -1 },
   { value: 'w4', label: 'Last 4 weeks', unit: 'week', count: 4 },
   { value: 'm1', label: 'This month', unit: 'month', count: 1 },
   { value: 'm3', label: 'Last 3 months', unit: 'month', count: 3 },
   { value: 'm6', label: 'Last 6 months', unit: 'month', count: 6 },
   { value: 'm12', label: 'Last 12 months', unit: 'month', count: 12 },
-] as const satisfies readonly { value: string; label: string; unit: 'week' | 'month'; count: number }[];
+] as const satisfies readonly {
+  value: string;
+  label: string;
+  unit: 'week' | 'month';
+  count: number;
+  /** Whole periods to step back before the window is taken. */
+  shift?: number;
+}[];
 
 type RangeKey = (typeof RANGES)[number]['value'];
+
+/** Four weeks: long enough to hold a shop's rhythm, short enough to read. */
+const DEFAULT_RANGE = 'w4' satisfies RangeKey;
 
 /**
  * The presets, plus the one the calendar beside them sets.
@@ -85,7 +107,16 @@ const RANGE_OPTIONS = [
 type PeriodChoice = RangeKey | 'custom';
 
 function rangeOf(key: string) {
-  return RANGES.find((range) => range.value === key) ?? RANGES[3];
+  // Found by name: a positional fallback silently changes meaning the next
+  // time a preset is inserted above it.
+  const found =
+    RANGES.find((range) => range.value === key) ??
+    RANGES.find((range) => range.value === DEFAULT_RANGE)!;
+
+  // Normalised here rather than written as `shift: 0` on six entries: `as
+  // const` makes each preset its own literal type, so a field only one of
+  // them carries cannot be read off the union.
+  return { ...found, shift: 'shift' in found ? found.shift : 0 };
 }
 
 /** One bar of the trend chart, whichever unit produced it. */
@@ -127,21 +158,32 @@ export default function InsightsScreen() {
    */
   const [mapDragging, setMapDragging] = useState(false);
 
-  const [range, setRange] = useState<PeriodChoice>('m3');
+  const [range, setRange] = useState<PeriodChoice>(() => {
+    // A value stored by an older build may name a preset that no longer
+    // exists, so it is checked against the list rather than trusted.
+    const stored = getInsightsRange();
+    return RANGE_OPTIONS.some((option) => option.value === stored)
+      ? (stored as PeriodChoice)
+      : DEFAULT_RANGE;
+  });
   /** The hand-picked range, kept even while a preset is in force. */
-  const [custom, setCustom] = useState<Period | null>(null);
+  const [custom, setCustom] = useState<Period | null>(() => getInsightsCustom() as Period | null);
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const { unit, count } = rangeOf(range);
+  const { unit, count, shift } = rangeOf(range);
 
   /**
    * Choosing "Custom" with nothing picked yet starts from what is on screen,
    * so the charts do not empty while waiting for two taps in a calendar.
    */
   const chooseRange = (next: PeriodChoice) => {
-    if (next === 'custom' && custom === null && data) setCustom(data.period);
+    if (next === 'custom' && custom === null && data) {
+      setCustom(data.period);
+      setInsightsCustom(data.period);
+    }
     setRange(next);
+    setInsightsRange(next);
   };
 
   const load = useCallback(async () => {
@@ -159,16 +201,22 @@ export default function InsightsScreen() {
     // what is driving the screen.
     const picked = range === 'custom' ? custom : null;
 
+    // "Last week" steps the anchor back a whole week before the window is
+    // taken; every other preset ends at the anchor itself.
+    const presetAnchor = shift ? addDays(anchorDate, shift * 7) : anchorDate;
+
     const period =
       picked ??
-      (unit === 'week' ? periodOfLastWeeks(count, anchorDate) : periodOfLastMonths(count, anchorDate));
+      (unit === 'week'
+        ? periodOfLastWeeks(count, presetAnchor)
+        : periodOfLastMonths(count, anchorDate));
 
     // A preset carries its own unit — "last 4 weeks" is weekly by
     // construction — while an arbitrary range has to be told, and its trend
     // ends where the range does rather than at the newest bill in the ledger.
     const trendUnit = picked ? trendUnitFor(picked) : unit;
     const trendCount = picked ? trendCountFor(picked, trendUnit) : count;
-    const trendAnchor = picked ? picked.to : anchorDate;
+    const trendAnchor = picked ? picked.to : presetAnchor;
 
     const [summary, breakdown, merchants, locations, trend] = await Promise.all([
       getSpendSummary(db, period),
@@ -203,7 +251,7 @@ export default function InsightsScreen() {
       trendUnit,
     });
     setLoading(false);
-  }, [unit, count, range, custom]);
+  }, [unit, count, shift, range, custom]);
 
   useFocusEffect(
     useCallback(() => {
@@ -337,7 +385,9 @@ export default function InsightsScreen() {
             value={custom}
             onChange={(picked) => {
               setCustom(picked);
+              setInsightsCustom(picked);
               setRange('custom');
+              setInsightsRange('custom');
             }}
             maxDate={todayLocalDate()}
           />

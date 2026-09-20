@@ -28,6 +28,11 @@ const KEYS = {
   visionParse: 'parse.vision',
   /** Keep the Ask conversation across launches (§6) — see `conversationRepo`. */
   saveAskHistory: 'ask.saveHistory',
+  /** The Insights period, so the screen opens where it was left. */
+  insightsRange: 'insights.range',
+  /** The hand-picked range behind `insights.range === 'custom'`. */
+  insightsCustomFrom: 'insights.customFrom',
+  insightsCustomTo: 'insights.customTo',
 } as const;
 
 export function getBlockScreenshots(): boolean {
@@ -66,15 +71,42 @@ export function setVisionParse(value: boolean): void {
 }
 
 export function getSaveAskHistory(): boolean {
-  // Off by default, and for a stronger reason than the other two. A saved
-  // conversation is a transcript: the questions *and* the answers, and an
-  // answer quotes amounts. §8.2's posture is that nothing outlives the
-  // session unless the user asks for it, and the app is fully usable without
-  // this — a conversation still survives switching tabs, it just does not
-  // survive closing the app.
-  return mmkv().getBoolean(KEYS.saveAskHistory) ?? false;
+  // On by default. It was off originally, on the §8.2 reasoning that a
+  // transcript holds answers and answers quote amounts — but a conversation
+  // that evaporates when the app closes surprises people who expect a chat to
+  // still be there, and losing an answer is its own kind of harm. The switch
+  // stays, so anyone who would rather it did not persist can say so, and
+  // turning it off still deletes what was kept.
+  return mmkv().getBoolean(KEYS.saveAskHistory) ?? true;
 }
 
 export function setSaveAskHistory(value: boolean): void {
   mmkv().set(KEYS.saveAskHistory, value);
+}
+
+/**
+ * The Insights period, remembered across launches.
+ *
+ * Returned as a plain string rather than the screen's own union: a value
+ * written by an older build may name a preset that no longer exists, and the
+ * screen is the right place to decide what to do about that.
+ */
+export function getInsightsRange(): string | null {
+  return mmkv().getString(KEYS.insightsRange) ?? null;
+}
+
+export function setInsightsRange(value: string): void {
+  mmkv().set(KEYS.insightsRange, value);
+}
+
+/** The dates behind a custom period, or null when none has been picked. */
+export function getInsightsCustom(): { from: string; to: string } | null {
+  const from = mmkv().getString(KEYS.insightsCustomFrom);
+  const to = mmkv().getString(KEYS.insightsCustomTo);
+  return from && to ? { from, to } : null;
+}
+
+export function setInsightsCustom(period: { from: string; to: string }): void {
+  mmkv().set(KEYS.insightsCustomFrom, period.from);
+  mmkv().set(KEYS.insightsCustomTo, period.to);
 }

@@ -340,9 +340,8 @@ export default function SettingsScreen() {
               <ThemedText>Save conversation records</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 Keeps your questions and their answers on this device so they are still
-                here next time you open the app. Off by default, because an answer
-                quotes amounts. Nothing is uploaded either way, and turning this off
-                deletes what was kept.
+                here next time you open the app. Nothing is uploaded either way, and
+                turning this off deletes what was kept.
               </ThemedText>
             </View>
             <Switch
