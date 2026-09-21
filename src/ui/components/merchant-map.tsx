@@ -58,6 +58,7 @@ import { formatMoney, formatMoneyCompact } from '@/data/money';
 import { fitPoints, panCentre, placePoints, touchDistance, zoomStepsFor } from '@/maps/fit';
 import { geocode, type GeoPoint } from '@/maps/geocode';
 import { readCache, writeCache } from '@/maps/geocodeCache';
+import { layoutLabels } from '@/maps/labels';
 import { mergeSpots } from '@/maps/spots';
 import {
   DEFAULT_ZOOM,
@@ -111,6 +112,10 @@ const clampOffset = (value: number) => Math.max(-12, Math.min(12, value));
  * visible instead of being silently covered.
  */
 const PIN_OPACITY = 0.72;
+
+/** One line of label text, and roughly how wide a character of it is. */
+const LABEL_HEIGHT = 15;
+const CHARACTER_WIDTH = 5.4;
 
 export interface MerchantMapProps {
   locations: readonly MerchantLocation[];
@@ -379,6 +384,42 @@ export function MerchantMap({
     MAP_HEIGHT
   );
 
+  /**
+   * Everything each spot needs drawn, worked out once.
+   *
+   * The label's width is estimated from its text, the same approximation the
+   * charts use — there is no measurement available before layout, and the
+   * arrangement only needs to know roughly how much room each one wants.
+   */
+  const marks = spots.map((spot, index) => {
+    const share = Math.sqrt(spot.totalCents / largest);
+    const size = MIN_PIN + (MAX_PIN - MIN_PIN) * share;
+    const amount = formatMoneyCompact(spot.totalCents, currency);
+    const text = `${spot.label}  ${amount}`;
+
+    return {
+      spot,
+      at: placements[index],
+      size,
+      amount,
+      width: Math.min(150, Math.max(44, Math.round(text.length * CHARACTER_WIDTH) + 12)),
+      colour: brandColour(spot.merchantNorm, spot.label),
+    };
+  });
+
+  // Anchored just under each pin, then shuffled clear of one another.
+  const labels = layoutLabels(
+    marks.map((mark) => ({
+      x: mark.at.x,
+      y: mark.at.y + mark.size / 2 + 3,
+      width: mark.width,
+      height: LABEL_HEIGHT,
+      weight: mark.spot.totalCents,
+    })),
+    MAP_HEIGHT,
+    0
+  );
+
   return (
     <View
       {...pan.panHandlers}
@@ -398,26 +439,16 @@ export function MerchantMap({
         Drawn smallest first, so the biggest spend ends up on top.
         `mergeSpots` orders by amount descending — right for the data, and
         exactly backwards for painting, since React Native draws later
-        siblings over earlier ones. Reversed here rather than sorted there,
-        and by render order rather than `zIndex`, which is unreliable between
-        siblings on Android.
+        siblings over earlier ones.
       */}
-      {spots
-        .map((spot, index) => ({ spot, at: placements[index] }))
+      {[...marks]
         .sort((a, b) => a.spot.totalCents - b.spot.totalCents)
-        .map(({ spot, at }) => {
-        // Area with the value, so the dot reads proportionally: doubling the
-        // spend doubles the ink, not the width.
-        const share = Math.sqrt(spot.totalCents / largest);
-        const size = MIN_PIN + (MAX_PIN - MIN_PIN) * share;
-        // The colour on the shop's own sign, where it is a chain this app
-        // recognises — see `merchantBrand`.
-        const colour = brandColour(spot.merchantNorm, spot.label);
-        const others = spot.merchants.length - 1;
+        .map(({ spot, at, size, colour }) => {
+          const others = spot.merchants.length - 1;
 
-        return (
-          <View key={spot.key} style={[styles.spot, { left: at.x, top: at.y }]}>
+          return (
             <Pressable
+              key={spot.key}
               onPress={() => onSelect(spot.merchantNorm, spot.label)}
               accessibilityRole="button"
               accessibilityLabel={
@@ -431,42 +462,46 @@ export function MerchantMap({
                   width: size,
                   height: size,
                   borderRadius: size / 2,
-                  // Centred on the place, which the wrapper has already moved to.
-                  marginLeft: -size / 2,
-                  marginTop: -size / 2,
+                  left: at.x - size / 2,
+                  top: at.y - size / 2,
                   backgroundColor: colour,
-                  // A ring in the surface colour, so two overlapping shops stay
-                  // countable rather than merging into one blob.
                   borderColor: theme.background,
                   opacity: pressed ? PIN_OPACITY * 0.6 : PIN_OPACITY,
                 },
               ]}
             />
+          );
+        })}
 
-            {/*
-              The shop and what went through it. `pointerEvents="none"` so the
-              label never swallows a tap meant for the pin under it, and the
-              name is held to one line — a long shop name would otherwise be
-              wider than the map it sits on.
-            */}
-            <View
-              pointerEvents="none"
-              style={[styles.label, { backgroundColor: theme.background, borderColor: theme.border }]}>
-              <ThemedText type="small" numberOfLines={1} style={styles.labelName}>
-                {spot.label}
-              </ThemedText>
+      {/*
+        Labels after every pin, so none is covered by a circle, and each one
+        where `layoutLabels` put it. The name first and the amount after it on
+        the same line; a label with nowhere free is dropped rather than piled
+        on its neighbour, and its pin still answers a tap.
+      */}
+      {marks.map((mark, index) =>
+        labels[index].hidden ? null : (
+          <View
+            key={`${mark.spot.key}-label`}
+            pointerEvents="none"
+            style={[
+              styles.label,
+              {
+                width: mark.width,
+                left: mark.at.x - mark.width / 2,
+                top: mark.at.y + mark.size / 2 + 3 + labels[index].dy,
+                backgroundColor: theme.background,
+                borderColor: theme.border,
+              },
+            ]}>
+            <ThemedText type="small" numberOfLines={1} style={styles.labelText}>
+              {mark.spot.label}{'  '}
               <ThemedText type="small" style={styles.labelAmount}>
-                {formatMoneyCompact(spot.totalCents, currency)}
+                {mark.amount}
               </ThemedText>
-            </View>
+            </ThemedText>
           </View>
-        );
-      })}
-
-      {resolving && (
-        <View style={styles.resolving}>
-          <ActivityIndicator size="small" />
-        </View>
+        )
       )}
 
       {/*
@@ -555,22 +590,18 @@ const styles = StyleSheet.create({
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.four },
   note: { textAlign: 'center' },
   tile: { position: 'absolute', width: TILE_SIZE, height: TILE_SIZE },
-  // Anchored on the place; the pin and its label position themselves around it.
-  spot: { position: 'absolute', alignItems: 'center' },
-  pin: { borderWidth: 2 },
+  pin: { position: 'absolute', borderWidth: 2 },
   label: {
-    marginTop: 1,
+    position: 'absolute',
+    height: LABEL_HEIGHT,
+    justifyContent: 'center',
     paddingHorizontal: Spacing.one,
     borderRadius: Radius.small,
     borderWidth: StyleSheet.hairlineWidth,
     opacity: 0.94,
-    alignItems: 'center',
-    // Wide enough for a shop name at this size, narrow enough that two
-    // neighbouring labels do not cover the map between them.
-    maxWidth: 104,
   },
-  labelName: { fontSize: 9 },
-  labelAmount: { fontSize: 10, fontVariant: ['tabular-nums'] },
+  labelText: { fontSize: 9.5, textAlign: 'center' },
+  labelAmount: { fontSize: 9.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
   resolving: { position: 'absolute', left: Spacing.two, top: Spacing.two },
   zoom: { position: 'absolute', right: Spacing.two, top: Spacing.two, gap: Spacing.one },
   zoomButton: {
