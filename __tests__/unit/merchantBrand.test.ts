@@ -9,7 +9,7 @@
  * sight.
  */
 
-import { BRAND_COLOURS, brandColour, brandOf } from '@/ui/merchantBrand';
+import { BRAND_COLOURS, brandColour, brandOf, shortMerchantName } from '@/ui/merchantBrand';
 
 describe('recognising a chain', () => {
   it.each([
@@ -69,5 +69,52 @@ describe('the colours themselves', () => {
 
   it('draws an unrecognised shop in the neutral colour', () => {
     expect(brandColour('bobs butchery')).toBe(BRAND_COLOURS.other);
+  });
+});
+
+/**
+ * A map label with no room for the branch (§4.14).
+ *
+ * The pin is already sitting on the branch, so the branch is the part a
+ * reader can spare. What must survive is the half that says which shop this
+ * is — losing that was what left bare amounts on the map.
+ */
+describe('a shop without its branch', () => {
+  it.each([
+    ["PAK'nSAVE Mill Street", 'paknsave mill street', "PAK'nSAVE"],
+    ['New World Rototuna', 'new world rototuna', 'New World'],
+    ['Countdown Te Rapa', 'countdown te rapa', 'Woolworths'],
+  ])('writes %s as the name on the sign', (printed, norm, expected) => {
+    expect(shortMerchantName(norm, printed)).toBe(expected);
+  });
+
+  /** Countdown and Woolworths are one chain, so both shorten the same way. */
+  it('does not care which name the receipt used for a rebranded chain', () => {
+    expect(shortMerchantName('woolworths te rapa', 'Woolworths Te Rapa')).toBe(
+      shortMerchantName('countdown te rapa', 'Countdown Te Rapa')
+    );
+  });
+
+  /**
+   * An independent shop has no branch. Taking its last word off does not
+   * shorten a name, it renames the shop — "Garden Fresh" is not "Garden".
+   */
+  it.each(['Wellmart Hamilton', 'BORMAN FRESH', 'Garden Fresh', 'The Warehouse'])(
+    'leaves %s whole, because it is not a chain',
+    (printed) => {
+      expect(shortMerchantName(null, printed)).toBe(printed);
+    }
+  );
+
+  /**
+   * Unchanged means there was nothing to take off, and the caller uses that
+   * to skip offering a form no shorter than the one it already has.
+   */
+  it('returns a one-word name unchanged', () => {
+    expect(shortMerchantName(null, 'Wellmart')).toBe('Wellmart');
+  });
+
+  it('copes with a name that is only spaces', () => {
+    expect(shortMerchantName(null, '   ')).toBe('   ');
   });
 });

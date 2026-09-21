@@ -76,3 +76,37 @@ export function brandOf(merchantNorm: string | null, printed?: string | null): M
 export function brandColour(merchantNorm: string | null, printed?: string | null): string {
   return BRAND_COLOURS[brandOf(merchantNorm, printed)];
 }
+
+/**
+ * The chain's own name, for a map label with no room for the branch (§4.14).
+ *
+ * "PAK'nSAVE Mill Street" is mostly branch, and the branch is the part a
+ * reader can spare: the pin is already sitting on the branch. Dropping it
+ * keeps the half that says which shop this is.
+ */
+const BRAND_NAMES: Record<Exclude<MerchantBrand, 'other'>, string> = {
+  paknsave: "PAK'nSAVE",
+  'new-world': 'New World',
+  woolworths: 'Woolworths',
+};
+
+/**
+ * A shop's name with the branch taken off, for where the full one will not fit.
+ *
+ * **Only the chains have a branch.** "PAK'nSAVE Mill Street" is one of dozens
+ * of PAK'nSAVEs and the branch is the part a reader can spare, because the pin
+ * is already sitting on it. An independent shop has no branch to lose: the
+ * whole of "Garden Fresh" is the shop's name, and guessing that the trailing
+ * word is a suburb turns a shop into a different, wrong shop.
+ *
+ * An earlier version did guess — it kept the leading word of any multi-word
+ * name — and produced "Garden" and "Wellmart", which is precisely the error
+ * that costs a name its meaning to save a few points of width.
+ *
+ * Returns the name unchanged when there is nothing to take off, and the caller
+ * then knows this form is no shorter than the one it already has.
+ */
+export function shortMerchantName(merchantNorm: string | null, printed: string): string {
+  const brand = brandOf(merchantNorm, printed);
+  return brand === 'other' ? printed : BRAND_NAMES[brand];
+}

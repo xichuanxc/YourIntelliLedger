@@ -59,7 +59,15 @@ import { fitPoints, panCentre, placePoints, touchDistance, zoomStepsFor } from '
 import { geocode, type GeoPoint } from '@/maps/geocode';
 import { readCache, writeCache } from '@/maps/geocodeCache';
 import { layoutLabels } from '@/maps/labels';
-import { mergeSpots } from '@/maps/spots';
+import {
+  LABEL_MAX_WIDTH,
+  LABEL_PADDING,
+  formText,
+  labelFormsFor,
+  labelWidthFor,
+  type LabelForm,
+} from '@/maps/labelText';
+import { mergeSpots, type MappedSpot } from '@/maps/spots';
 import {
   DEFAULT_ZOOM,
   OSM_TILE_HEADERS,
@@ -113,26 +121,24 @@ const clampOffset = (value: number) => Math.max(-12, Math.min(12, value));
  */
 const PIN_OPACITY = 0.72;
 
-/** One line of label text, and roughly how wide a character of it is. */
+/** One line of label text. What it says and how wide it is: `labelText.ts`. */
 const LABEL_HEIGHT = 22;
 const LABEL_FONT_SIZE = 14;
-// Capitals run wider than this average suggests, and a shop that shouts its
-// name — BORMAN FRESH, PAK'nSAVE — is common on a receipt. Under-estimating
-// clips the amount off the end, so the estimate leans generous.
-const CHARACTER_WIDTH = 9.5;
+/** Clear air between the edge of a pin and the near edge of its chip. */
+const LABEL_CLEARANCE = 4;
 
-/**
- * Sizing shared by the arrangement and the drawing.
- *
- * Both have to agree: a label laid out at one width and drawn at another
- * would be arranged around a rectangle it does not occupy, and the overlaps
- * the layout avoided would come back.
- */
 const pinSizeFor = (cents: number, largest: number) =>
   MIN_PIN + (MAX_PIN - MIN_PIN) * Math.sqrt(cents / largest);
 
-const labelWidthFor = (text: string) =>
-  Math.min(250, Math.max(70, Math.round(text.length * CHARACTER_WIDTH) + 16));
+/**
+ * Everything this shop's label could say, most complete first.
+ *
+ * The arrangement is handed the widths and takes the first that fits; the
+ * same list is read again at drawing time by the index it reports back, so
+ * the text measured and the text drawn are always the same string.
+ */
+const formsFor = (spot: MappedSpot, currency: string): LabelForm[] =>
+  labelFormsFor(spot.label, spot.merchantNorm, formatMoneyCompact(spot.totalCents, currency));
 
 export interface MerchantMapProps {
   locations: readonly MerchantLocation[];
@@ -362,18 +368,22 @@ export function MerchantMap({
 
     return layoutLabels(
       spots.map((spot, index) => {
-        const size = pinSizeFor(spot.totalCents, biggest);
-        const text = `${spot.label}  ${formatMoneyCompact(spot.totalCents, currency)}`;
+        const [full, ...rest] = formsFor(spot, currency).map(formText);
         return {
+          // The pin's centre: the arrangement works outwards from there, and
+          // needs the radius to know where the circle ends.
           x: view.placements[index].x,
-          y: view.placements[index].y + size / 2 + 3,
-          width: labelWidthFor(text),
+          y: view.placements[index].y,
+          radius: pinSizeFor(spot.totalCents, biggest) / 2,
+          width: labelWidthFor(full),
+          // What this shop falls back to in a crowd, rather than vanishing.
+          alternatives: rest.map(labelWidthFor),
           height: LABEL_HEIGHT,
           weight: spot.totalCents,
         };
       }),
       { width, height: MAP_HEIGHT },
-      0
+      LABEL_CLEARANCE
     );
   }, [spots, view, width, currency]);
 
@@ -431,25 +441,16 @@ export function MerchantMap({
     MAP_HEIGHT
   );
 
-  /**
-   * Everything each spot needs drawn, worked out once.
-   *
-   * The label's width is estimated from its text, the same approximation the
-   * charts use — there is no measurement available before layout, and the
-   * arrangement only needs to know roughly how much room each one wants.
-   */
-  const marks = spots.map((spot, index) => {
-    const amount = formatMoneyCompact(spot.totalCents, currency);
-
-    return {
-      spot,
-      at: placements[index],
-      size: pinSizeFor(spot.totalCents, largest),
-      amount,
-      width: labelWidthFor(`${spot.label}  ${amount}`),
-      colour: brandColour(spot.merchantNorm, spot.label),
-    };
-  });
+  /** Everything each spot needs drawn, worked out once. */
+  const marks = spots.map((spot, index) => ({
+    spot,
+    at: placements[index],
+    size: pinSizeFor(spot.totalCents, largest),
+    amount: formatMoneyCompact(spot.totalCents, currency),
+    /** The same list the arrangement measured, so `form` indexes into it. */
+    forms: formsFor(spot, currency),
+    colour: brandColour(spot.merchantNorm, spot.label),
+  }));
 
   return (
     <View
@@ -506,34 +507,54 @@ export function MerchantMap({
 
       {/*
         Labels after every pin, so none is covered by a circle, and each one
-        where `layoutLabels` put it. The name first and the amount after it on
-        the same line; a label with nowhere free is dropped rather than piled
-        on its neighbour, and its pin still answers a tap.
+        where `layoutLabels` put it — beside its pin, on whichever side was
+        free. The name first and the amount after it on the same line, unless
+        the crowd left room only for the amount; a label with nowhere free in
+        either form is dropped rather than piled on its neighbour, and its pin
+        still answers a tap.
+
+        Anchored by its near edge rather than by a centre, and drawn without a
+        width, so the chip is exactly as wide as its text: pinned on the left
+        when it sits to the right of the pin, and on the right when it sits to
+        the left, in both cases growing away from the circle. That is what
+        keeps a short name from wearing a wide chip.
       */}
-      {marks.map((mark, index) =>
-        labels[index].hidden ? null : (
+      {marks.map((mark, index) => {
+        const place = labels[index];
+        if (place.hidden) return null;
+        // Whichever form the arrangement found room for.
+        const form = mark.forms[place.form] ?? mark.forms[0];
+        const edge = mark.size / 2 + LABEL_CLEARANCE;
+
+        return (
           <View
             key={`${mark.spot.key}-label`}
             pointerEvents="none"
             style={[
               styles.label,
+              place.dx >= 0
+                ? { left: mark.at.x + edge }
+                : { right: width - (mark.at.x - edge) },
               {
-                width: mark.width,
-                left: mark.at.x + labels[index].dx - mark.width / 2,
-                top: mark.at.y + mark.size / 2 + 3 + labels[index].dy,
+                top: mark.at.y + place.dy,
                 backgroundColor: theme.background,
                 borderColor: theme.border,
               },
             ]}>
             <ThemedText type="small" numberOfLines={1} style={styles.labelText}>
-              {mark.spot.label}{'  '}
+              {form.name !== null && (
+                <>
+                  {form.name}
+                  {'  '}
+                </>
+              )}
               <ThemedText type="small" style={styles.labelAmount}>
-                {mark.amount}
+                {form.amount}
               </ThemedText>
             </ThemedText>
           </View>
-        )
-      )}
+        );
+      })}
 
       {/*
         Zooming in is what separates shops that sit on top of each other at the
@@ -625,13 +646,16 @@ const styles = StyleSheet.create({
   label: {
     position: 'absolute',
     height: LABEL_HEIGHT,
+    maxWidth: LABEL_MAX_WIDTH,
     justifyContent: 'center',
-    paddingHorizontal: Spacing.two,
+    paddingHorizontal: LABEL_PADDING,
     borderRadius: Radius.small,
     borderWidth: StyleSheet.hairlineWidth,
-    opacity: 0.94,
+    // Enough to read the street through, not so much that the text competes
+    // with the map underneath it.
+    opacity: 0.85,
   },
-  labelText: { fontSize: LABEL_FONT_SIZE, textAlign: 'center' },
+  labelText: { fontSize: LABEL_FONT_SIZE },
   labelAmount: { fontSize: LABEL_FONT_SIZE, fontWeight: '600', fontVariant: ['tabular-nums'] },
   resolving: { position: 'absolute', left: Spacing.two, top: Spacing.two },
   zoom: { position: 'absolute', right: Spacing.two, top: Spacing.two, gap: Spacing.one },
