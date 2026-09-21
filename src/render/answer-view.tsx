@@ -154,36 +154,30 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
    * Warehouse" arrive as "pantry…" or as nothing — a chart whose axis cannot
    * be read is a picture of numbers with no names on them.
    */
+  /**
+   * Long names are not an axis problem, and three attempts at treating them
+   * as one said so.
+   *
+   * Under a bar there is no room: a phone gives each about forty points, so
+   * the library clipped them. Widening the label's box pushed every label off
+   * its own bar, because the box is centred on it. Turning the chart sideways
+   * moved the names to the side and then offset them two rows from the bars
+   * they belonged to.
+   *
+   * Eight shops with names like "PAK'nSAVE Mill Street" is a **ranked list**,
+   * not a bar chart — which is also the standing advice for more than about
+   * seven labelled classes. Drawn below out of plain views: the name and the
+   * amount on one line, the bar beneath. Nothing to clip, nothing to rotate,
+   * and no guessing at the width of text.
+   */
   const LONG_LABEL = 6;
   const longest = points.reduce((most, point) => Math.max(most, point.label.length), 0);
-  const rotated = longest > LONG_LABEL;
-
-  /**
-   * The label's own slot, wide enough to hold it.
-   *
-   * The ellipsis was never ours — the library draws each label in a
-   * fixed-width slot and clips what does not fit, which tilting alone did not
-   * change. Estimated from the character count at this font size, because
-   * there is no text measurement available here; a proportional face makes
-   * this approximate rather than exact, so the cap is generous.
-   */
-  const labelWidth = Math.min(112, Math.max(44, Math.round(longest * 6)));
+  const ranked = plan.kind === 'bars' && longest > LONG_LABEL;
 
   const shared = {
     width: chartWidth,
-    height: 160,
-    // Tilted only when something needs it: rotating "Sep" and "Oct" would add
-    // an angle to read for nothing.
-    rotateLabel: rotated,
-    labelWidth: rotated ? labelWidth : undefined,
-    // One line: a rotated label that wrapped would read as two labels.
-    xAxisTextNumberOfLines: 1,
-    // A tilted label runs diagonally, so the room it needs below the axis
-    // grows with its length — otherwise the chart's own height crops it.
-    labelsExtraHeight: rotated ? Math.min(64, Math.round(labelWidth * 0.7)) : 0,
     maxValue: max,
     noOfSections: SECTIONS,
-    yAxisLabelTexts: axisLabels(step, plan.money, currency),
     yAxisTextStyle: { color: theme.textSecondary, fontSize: 10 },
     xAxisLabelTextStyle: { color: theme.textSecondary, fontSize: 10 },
     yAxisColor: theme.border,
@@ -192,12 +186,21 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
     isAnimated: false,
   };
 
+  const upright = {
+    ...shared,
+    height: 160,
+    yAxisLabelTexts: axisLabels(step, plan.money, currency),
+  };
+
+
   return (
     <View style={styles.block}>
       {plan.title && <Caption>{plan.title}</Caption>}
-      {plan.kind === 'bars' ? (
+      {plan.kind === 'bars' && ranked ? (
+        <RankedBars points={points} money={plan.money} currency={currency} colour={colour} />
+      ) : plan.kind === 'bars' ? (
         <BarChart
-          {...shared}
+          {...upright}
           data={points.map((point) => ({
             value: point.value,
             label: point.label,
@@ -211,7 +214,7 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
         />
       ) : (
         <LineChart
-          {...shared}
+          {...upright}
           data={points.map((point) => ({ value: point.value, label: point.label }))}
           color={colour}
           thickness={2}
@@ -221,6 +224,56 @@ export function AnswerView({ plan, currency }: AnswerViewProps) {
           curved={false}
         />
       )}
+    </View>
+  );
+}
+
+/**
+ * A ranked list with a bar behind each row.
+ *
+ * Plain views rather than the chart library, because the thing that kept
+ * going wrong was the library's own label placement. Here a name is a `Text`
+ * on a line of its own width: it cannot be clipped by a slot, cannot drift
+ * from its bar, and needs no estimate of how wide the words are.
+ */
+function RankedBars({
+  points,
+  money,
+  currency,
+  colour,
+}: {
+  points: PlottedValue[];
+  money: boolean;
+  currency: string;
+  colour: string;
+}) {
+  const theme = useTheme();
+  // Widths are a share of the largest, so the longest bar fills the row.
+  const largest = Math.max(...points.map((point) => point.value), 1);
+
+  return (
+    <View style={styles.ranked}>
+      {points.map((point) => (
+        <View key={point.label} style={styles.rankedRow}>
+          <View style={styles.rankedHead}>
+            <ThemedText type="small" numberOfLines={1} style={styles.rankedName}>
+              {point.label}
+            </ThemedText>
+            <ThemedText type="smallBold" style={styles.rankedValue}>
+              {money ? formatMoneyCompact(point.cents, currency) : point.value.toLocaleString()}
+            </ThemedText>
+          </View>
+
+          <View style={[styles.rankedTrack, { backgroundColor: theme.backgroundSelected }]}>
+            <View
+              style={[
+                styles.rankedFill,
+                { width: `${Math.max(2, (point.value / largest) * 100)}%`, backgroundColor: colour },
+              ]}
+            />
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -239,4 +292,13 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: Spacing.three, paddingVertical: Spacing.one, borderTopWidth: StyleSheet.hairlineWidth },
   cell: { flex: 1 },
   numeric: { textAlign: 'right' },
+  ranked: { gap: Spacing.two, marginTop: Spacing.one },
+  rankedRow: { gap: Spacing.half },
+  rankedHead: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.two },
+  // The name takes the room it needs; the amount keeps its own column so the
+  // figures line up down the list.
+  rankedName: { flex: 1 },
+  rankedValue: { fontVariant: ['tabular-nums'] },
+  rankedTrack: { height: 8, borderRadius: 4, overflow: 'hidden' },
+  rankedFill: { height: '100%', borderRadius: 4 },
 });

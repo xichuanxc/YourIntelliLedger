@@ -74,14 +74,35 @@ describe('a table', () => {
  * surrounding labelling — which is this file's job — not the drawing.
  */
 describe('choosing the mark', () => {
-  it('draws bars for a comparison', async () => {
+  it('draws bars for a comparison with short labels', async () => {
     await draw({
       kind: 'bars',
-      title: 'Spend by category',
-      bars: [point('Produce', 64.2), point('Dairy', 43.1)],
+      title: 'Spend by month',
+      bars: [point('Jun', 64.2), point('Jul', 43.1)],
       money: true,
     });
     expect(screen.getByText('bar-chart')).toBeTruthy();
+    expect(screen.getByText('Spend by month')).toBeTruthy();
+  });
+
+  /**
+   * Long names under a bar have nowhere to go: a phone gives each about forty
+   * points, so an axis either clips them or pushes them off their own bar.
+   * Past that width the same numbers are drawn as a ranked list, where a name
+   * sits on a line of its own.
+   */
+  it('draws a ranked list when the labels are names', async () => {
+    await draw({
+      kind: 'bars',
+      title: 'Spend by category',
+      bars: [point('Pantry staple', 64.2), point('Chemist Warehouse', 43.1)],
+      money: true,
+    });
+
+    expect(screen.queryByText('bar-chart')).toBeNull();
+    // In full, both of them — the whole point of the change.
+    expect(screen.getByText('Pantry staple')).toBeTruthy();
+    expect(screen.getByText('Chemist Warehouse')).toBeTruthy();
     expect(screen.getByText('Spend by category')).toBeTruthy();
   });
 
