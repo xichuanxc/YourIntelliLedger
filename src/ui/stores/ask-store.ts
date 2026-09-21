@@ -25,12 +25,13 @@ import { partialAnswer } from '@/agent/envelopeStream';
 import { runAgentTurn } from '@/agent/loop';
 import type { ChatMessage } from '@/agent/messages';
 import type { AnswerEnvelope } from '@/agent/envelope';
-import type { BillReference } from '@/agent/execute';
+import type { BillReference, PendingWrite } from '@/agent/execute';
 import {
   appendMessage,
   clearConversation as clearStoredConversation,
   getConversation,
 } from '@/data/conversationRepo';
+import { applyPendingWrite } from '@/data/applyWrite';
 import { getDb } from '@/data/db';
 import { todayLocalDate } from '@/data/dates';
 import { getDataRange } from '@/data/insightsRepo';
@@ -43,6 +44,7 @@ import { getSaveAskHistory } from '@/data/prefs';
 import { logQuery } from '@/data/telemetryRepo';
 import { tryFastpath } from '@/fastpath';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
+import { useLedgerStore } from '@/ui/stores/ledger-store';
 
 export interface AskMessage {
   id: string;
@@ -57,6 +59,14 @@ export interface AskMessage {
    * The answer's structured half (§14.7) — what §6.7's renderer draws.
    */
   envelope?: AnswerEnvelope;
+  /**
+   * Writes the model proposed, validated and not applied (§6.4).
+   *
+   * Session-only, deliberately: a restored conversation brings back the
+   * answers without them, so yesterday's proposal is not still one tap from
+   * committing.
+   */
+  pendingWrites?: PendingWrite[];
   /**
    * The currency the answer's amounts were computed in.
    *
@@ -100,6 +110,8 @@ interface AskState {
   restore: () => Promise<void>;
   /** Forgets the conversation on screen *and* any saved copy of it. */
   clearConversation: () => Promise<void>;
+  /** Commits a write the user confirmed on a card (§6.4). */
+  applyWrite: (write: PendingWrite) => Promise<void>;
 }
 
 /**
@@ -154,6 +166,16 @@ export const useAskStore = create<AskState>((set, get) => ({
       // A conversation that will not load is a lost convenience, not a
       // reason to keep someone out of the screen.
     }
+  },
+
+  applyWrite: async (write: PendingWrite) => {
+    // Errors are deliberately not swallowed here: the card shows them, and a
+    // write that failed must not look like one that worked.
+    const db = await getDb();
+    await applyPendingWrite(db, write);
+
+    // The Ledger tab may be showing the bill that just changed.
+    await useLedgerStore.getState().refresh();
   },
 
   clearConversation: async () => {
@@ -302,6 +324,7 @@ export const useAskStore = create<AskState>((set, get) => ({
           text: answer,
           envelope: turn.envelope,
           references: turn.references,
+          pendingWrites: turn.pendingWrites.length > 0 ? turn.pendingWrites : undefined,
           currency: catalog.currency,
         },
       ],
@@ -312,6 +335,9 @@ export const useAskStore = create<AskState>((set, get) => ({
 
     if (keep) {
       try {
+        // No `pendingWrites`: a saved conversation keeps the answers and not
+        // the proposals, so reopening the app tomorrow cannot leave a
+        // deletion one tap away.
         await appendMessage(db, {
           role: 'assistant',
           text: answer,

@@ -20,7 +20,7 @@
 import { compileQuery } from '@/agent/compile';
 import type { ToolCall } from '@/agent/messages';
 import { toolByName } from '@/agent/tools';
-import { validateToolCall, type ValidationContext } from '@/agent/validate';
+import { validateToolCall, type ValidatedCall, type ValidationContext } from '@/agent/validate';
 import type { SqlDriver } from '@/data/driver';
 import { getBill } from '@/data/ledgerRepo';
 import { unitBasisLabel, unitPriceOf, type UnitPriceInput } from '@/data/unitPrice';
@@ -52,12 +52,28 @@ export interface BillReference {
   label: string;
 }
 
+/**
+ * A write the model proposed and the validator approved, waiting on a tap.
+ *
+ * The **validated** call, not the model's description of it. §14.7's
+ * `pending_actions` carry a tool name and a sentence, which is the right
+ * material for a card to *read* and quite the wrong material to write from:
+ * committing from prose would mean the database following what the model
+ * said rather than what the validator allowed.
+ */
+export type PendingWrite = Extract<
+  ValidatedCall,
+  { name: 'update_bill_item' } | { name: 'delete_bill' }
+>;
+
 export interface ExecutionResult {
   /** The tool message content, verbatim. */
   content: string;
   status: ExecutionStatus;
   /** Names this result can vouch for. Never sent to the model. */
   references?: BillReference[];
+  /** Set only for a write: what a confirmation card would commit (§6.4). */
+  pendingWrite?: PendingWrite;
 }
 
 function reply(
@@ -259,7 +275,12 @@ export async function executeToolCall(
   // write tools have no execution path at all, rather than one that is
   // currently unreachable.
   if (tool.kind === 'write') {
-    return reply({ status: 'pending_user_confirmation' }, 'pending');
+    // Carried out with the result rather than rebuilt later: this is the only
+    // point at which the arguments are known to have passed §14.5.
+    return {
+      ...reply({ status: 'pending_user_confirmation' }, 'pending'),
+      pendingWrite: validated.call as PendingWrite,
+    };
   }
 
   try {

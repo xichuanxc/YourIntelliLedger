@@ -35,7 +35,12 @@
 import type { ChatTransport, OnDelta } from '@/agent/chatTransport';
 import type { DataCatalog } from '@/agent/catalog';
 import { parseEnvelope, type AnswerEnvelope } from '@/agent/envelope';
-import { executeToolCall, type BillReference, type ExecutionStatus } from '@/agent/execute';
+import {
+  executeToolCall,
+  type BillReference,
+  type ExecutionStatus,
+  type PendingWrite,
+} from '@/agent/execute';
 import type { ChatMessage, ChatReply } from '@/agent/messages';
 import { TransportRequestError, TransportUnavailableError } from '@/agent/parseTransport';
 import { assembleRequest } from '@/agent/prompt';
@@ -90,6 +95,15 @@ export interface AgentTurn {
    */
   references: BillReference[];
   /**
+   * Writes proposed and validated but **not** applied (§6.4).
+   *
+   * Nothing here has touched the database: the executor has no path that
+   * mutates, so §6.8's "no write ever commits without an explicit user tap"
+   * holds because there is nowhere for one to happen, not because a check
+   * refuses it. A confirmation card commits these on a tap.
+   */
+  pendingWrites: PendingWrite[];
+  /**
    * What actually went wrong, for a developer.
    *
    * Returned rather than logged: §15.3 keeps `query_log` free of content, and
@@ -123,6 +137,7 @@ export async function runAgentTurn(
   const working: ChatMessage[] = [...history, { role: 'user', content: userMessage }];
   const toolCalls: QueryLogDraft['toolCalls'] = [];
   const references: BillReference[] = [];
+  const pendingWrites: PendingWrite[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
   let rejections = 0;
@@ -139,6 +154,7 @@ export async function runAgentTurn(
       envelope,
       history: working,
       references,
+      pendingWrites,
       errorDetail,
       log: {
         route: 'agent',
@@ -187,6 +203,7 @@ export async function runAgentTurn(
 
         if (result.status === 'rejected') rejections += 1;
         if (result.status === 'pending') toolsOff = true;
+        if (result.pendingWrite) pendingWrites.push(result.pendingWrite);
       }
 
       if (rejections >= MAX_REJECTIONS) {

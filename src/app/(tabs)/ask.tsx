@@ -37,6 +37,7 @@ import {
 import { AnswerView } from '@/render/answer-view';
 import { planRender } from '@/render/plan';
 import { linkify } from '@/ui/linkify';
+import { ConfirmationCard } from '@/ui/components/confirmation-card';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
@@ -104,8 +105,17 @@ export default function AskScreen() {
   // Android only: iOS's `KeyboardAvoidingView` already moves the composer, and
   // adding the height there would lift it by the keyboard twice over.
   const androidKeyboardInset = Platform.OS === 'android' ? keyboardHeight : 0;
-  const { messages, thinking, streaming, suggestions, send, loadSuggestions, restore, clearConversation } =
-    useAskStore();
+  const {
+    messages,
+    thinking,
+    streaming,
+    suggestions,
+    send,
+    loadSuggestions,
+    restore,
+    clearConversation,
+    applyWrite,
+  } = useAskStore();
   const [draft, setDraft] = useState('');
   const list = useRef<FlatList<AskMessage>>(null);
   const input = useRef<TextInput>(null);
@@ -329,7 +339,25 @@ export default function AskScreen() {
             // Only visible once the keyboard takes half the screen away.
             style={styles.flex}
             contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => <Bubble message={item} onReuse={confirmReuse} />}
+            renderItem={({ item }) => (
+              <View>
+                <Bubble message={item} onReuse={confirmReuse} />
+                {/*
+                  §6.4's card, under the answer that proposed it. The model's
+                  own wording is paired by position with the write it
+                  describes — the envelope lists them in the order they were
+                  called — and is only ever read, never written from.
+                */}
+                {item.pendingWrites?.map((write, index) => (
+                  <ConfirmationCard
+                    key={`${item.id}-${index}`}
+                    write={write}
+                    summary={item.envelope?.pending_actions?.[index]?.summary}
+                    onApply={applyWrite}
+                  />
+                ))}
+              </View>
+            )}
             // The list holds the answers, so it should not eat a tap meant for
             // the keyboard's dismissal.
             // `interactive` follows the finger on iOS, which is what people

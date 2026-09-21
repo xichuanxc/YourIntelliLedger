@@ -213,6 +213,31 @@ describe('when the model gets it wrong', () => {
     expect(transport.requests.at(-1)?.tool_choice).toBe('none');
   });
 
+  /**
+   * §6.4 and §6.8: a write is proposed, never applied. The loop carries the
+   * **validated** call out so a confirmation card commits what the validator
+   * approved rather than what the model said about it.
+   */
+  it('carries a write out for confirmation without applying it', async () => {
+    const transport = scripted([
+      calls(call('delete_bill', { bill_id: 7 })),
+      says('That bill is ready to delete — confirm below.'),
+    ]);
+
+    const turn = await runAgentTurn('delete that bill', [], deps(transport));
+
+    expect(turn.pendingWrites).toEqual([{ name: 'delete_bill', args: { bill_id: 7 } }]);
+    // Tools off afterwards: nothing else may be proposed alongside a write.
+    expect(transport.requests.at(-1)?.tool_choice).toBe('none');
+  });
+
+  it('proposes nothing when the turn only read', async () => {
+    const transport = scripted([calls(call('query_ledger', { metric: 'count' })), says('Two.')]);
+    const turn = await runAgentTurn('how many?', [], deps(transport));
+
+    expect(turn.pendingWrites).toEqual([]);
+  });
+
   it('shows an offline notice when the network fails', async () => {
     const transport: ChatTransport = {
       name: 'broken',
