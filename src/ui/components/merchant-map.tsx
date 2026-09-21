@@ -75,7 +75,7 @@ import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { MinTouchTarget, Radius, Spacing } from '@/ui/theme';
 
-const MAP_HEIGHT = 200;
+const MAP_HEIGHT = 220;
 
 /**
  * Pin diameters. The floor is a touch target rather than a design choice —
@@ -114,8 +114,25 @@ const clampOffset = (value: number) => Math.max(-12, Math.min(12, value));
 const PIN_OPACITY = 0.72;
 
 /** One line of label text, and roughly how wide a character of it is. */
-const LABEL_HEIGHT = 15;
-const CHARACTER_WIDTH = 5.4;
+const LABEL_HEIGHT = 22;
+const LABEL_FONT_SIZE = 14;
+// Capitals run wider than this average suggests, and a shop that shouts its
+// name — BORMAN FRESH, PAK'nSAVE — is common on a receipt. Under-estimating
+// clips the amount off the end, so the estimate leans generous.
+const CHARACTER_WIDTH = 9.5;
+
+/**
+ * Sizing shared by the arrangement and the drawing.
+ *
+ * Both have to agree: a label laid out at one width and drawn at another
+ * would be arranged around a rectangle it does not occupy, and the overlaps
+ * the layout avoided would come back.
+ */
+const pinSizeFor = (cents: number, largest: number) =>
+  MIN_PIN + (MAX_PIN - MIN_PIN) * Math.sqrt(cents / largest);
+
+const labelWidthFor = (text: string) =>
+  Math.min(250, Math.max(70, Math.round(text.length * CHARACTER_WIDTH) + 16));
 
 export interface MerchantMapProps {
   locations: readonly MerchantLocation[];
@@ -330,6 +347,36 @@ export function MerchantMap({
     [spots, width]
   );
 
+  /**
+   * Where each label sits relative to its own pin, decided once.
+   *
+   * Against the **fitted** placements, which change only when the shops or
+   * the width do — not with the zoom or the pan. Re-deciding on every frame
+   * made labels jump about as the map moved, each one rearranging itself
+   * around wherever its neighbours had got to. An offset chosen once and
+   * carried with the pin keeps a label where the reader last saw it.
+   */
+  const labels = useMemo(() => {
+    if (!view) return [];
+    const biggest = Math.max(...spots.map((spot) => spot.totalCents), 1);
+
+    return layoutLabels(
+      spots.map((spot, index) => {
+        const size = pinSizeFor(spot.totalCents, biggest);
+        const text = `${spot.label}  ${formatMoneyCompact(spot.totalCents, currency)}`;
+        return {
+          x: view.placements[index].x,
+          y: view.placements[index].y + size / 2 + 3,
+          width: labelWidthFor(text),
+          height: LABEL_HEIGHT,
+          weight: spot.totalCents,
+        };
+      }),
+      { width, height: MAP_HEIGHT },
+      0
+    );
+  }, [spots, view, width, currency]);
+
   const resolving = placed.length < locations.length;
 
   // The fitted view is where the map starts, not where it has to stay.
@@ -392,33 +439,17 @@ export function MerchantMap({
    * arrangement only needs to know roughly how much room each one wants.
    */
   const marks = spots.map((spot, index) => {
-    const share = Math.sqrt(spot.totalCents / largest);
-    const size = MIN_PIN + (MAX_PIN - MIN_PIN) * share;
     const amount = formatMoneyCompact(spot.totalCents, currency);
-    const text = `${spot.label}  ${amount}`;
 
     return {
       spot,
       at: placements[index],
-      size,
+      size: pinSizeFor(spot.totalCents, largest),
       amount,
-      width: Math.min(150, Math.max(44, Math.round(text.length * CHARACTER_WIDTH) + 12)),
+      width: labelWidthFor(`${spot.label}  ${amount}`),
       colour: brandColour(spot.merchantNorm, spot.label),
     };
   });
-
-  // Anchored just under each pin, then shuffled clear of one another.
-  const labels = layoutLabels(
-    marks.map((mark) => ({
-      x: mark.at.x,
-      y: mark.at.y + mark.size / 2 + 3,
-      width: mark.width,
-      height: LABEL_HEIGHT,
-      weight: mark.spot.totalCents,
-    })),
-    { width, height: MAP_HEIGHT },
-    0
-  );
 
   return (
     <View
@@ -595,13 +626,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     height: LABEL_HEIGHT,
     justifyContent: 'center',
-    paddingHorizontal: Spacing.one,
+    paddingHorizontal: Spacing.two,
     borderRadius: Radius.small,
     borderWidth: StyleSheet.hairlineWidth,
     opacity: 0.94,
   },
-  labelText: { fontSize: 9.5, textAlign: 'center' },
-  labelAmount: { fontSize: 9.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  labelText: { fontSize: LABEL_FONT_SIZE, textAlign: 'center' },
+  labelAmount: { fontSize: LABEL_FONT_SIZE, fontWeight: '600', fontVariant: ['tabular-nums'] },
   resolving: { position: 'absolute', left: Spacing.two, top: Spacing.two },
   zoom: { position: 'absolute', right: Spacing.two, top: Spacing.two, gap: Spacing.one },
   zoomButton: {

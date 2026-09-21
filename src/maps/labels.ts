@@ -44,8 +44,14 @@ export interface LabelViewport {
 /** Clear air between two labels, so they read as separate. */
 const GAP = 2;
 
-/** How far from its pin a label may be pushed before it stops being its own. */
-const MAX_STEPS = 3;
+/**
+ * How far from its pin a label may be pushed before it stops being its own.
+ *
+ * Raised once the labels grew: bigger chips need more room, and three rings
+ * left shops undrawn with space still free further out. A label five rings
+ * away is a stretch, but a shop with no label at all is worse.
+ */
+const MAX_STEPS = 5;
 
 /**
  * Sideways steps are a fraction of the label's width rather than all of it:
