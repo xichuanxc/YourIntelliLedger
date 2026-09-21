@@ -416,7 +416,7 @@ export function MerchantMap({
       height: LABEL_HEIGHT,
       weight: mark.spot.totalCents,
     })),
-    MAP_HEIGHT,
+    { width, height: MAP_HEIGHT },
     0
   );
 
@@ -488,7 +488,7 @@ export function MerchantMap({
               styles.label,
               {
                 width: mark.width,
-                left: mark.at.x - mark.width / 2,
+                left: mark.at.x + labels[index].dx - mark.width / 2,
                 top: mark.at.y + mark.size / 2 + 3 + labels[index].dy,
                 backgroundColor: theme.background,
                 borderColor: theme.border,
