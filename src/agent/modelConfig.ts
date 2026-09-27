@@ -150,3 +150,18 @@ export function hubConfigStatus(): { source: 'hub' | 'built-in'; fetchedAt: numb
     ? { source: 'hub', fetchedAt: cached.fetchedAt }
     : { source: 'built-in', fetchedAt: null };
 }
+
+/**
+ * Drops the cached hub configuration (§15.2).
+ *
+ * Not personal data, but it is device state the app fetched, and an erase
+ * that claims to reset the app should leave it asking the hub afresh rather
+ * than trusting a stamp from before the wipe.
+ */
+export function clearHubConfig(): void {
+  try {
+    mmkv().clearAll();
+  } catch {
+    // The built-in defaults cover this until the hub answers again.
+  }
+}

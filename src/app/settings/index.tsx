@@ -4,10 +4,13 @@
  * What is here: the BYOK key and model, a plain statement of what leaves the
  * device, local usage for this month, and the §8.2 screenshot block.
  *
+ * "Your data" is export, import and delete-all (§15.1, §15.2), and they are
+ * one section on purpose. §15.2 asks that an export be offered before an
+ * irreversible delete, and the surest way to offer it is to put it directly
+ * above, in the same block, rather than trusting somebody to have found it
+ * earlier.
+ *
  * What is deliberately not here yet:
- *  - **Export (§15.1)** and **delete-all (§15.2)**, which belong together —
- *    §15.2 says export should be offered first, so shipping an irreversible
- *    delete before there is any way to back up would be a sharp edge.
  *  - **Quota and the active model alias (§13.3, §13.4)**, which read from the
  *    hub and have nothing to show until it exists.
  */
@@ -28,7 +31,9 @@ import {
   setByokKey,
   setByokModel,
 } from '@/agent/byokKey';
+import { eraseLedger, exportLedger, importLedger } from '@/data/backupFile';
 import { clearConversation } from '@/data/conversationRepo';
+import { CONFIRM_PHRASE, confirmationMatches } from '@/data/eraseAll';
 import { getDb } from '@/data/db';
 import {
   getBlockScreenshots,
@@ -445,17 +450,163 @@ export default function SettingsScreen() {
           </View>
         </Section>
 
+        <YourDataSection />
+
         <Section title="Not built yet">
           <ThemedText type="small" themeColor="textSecondary">
-            Export and delete-all arrive together, so there is always a backup before anything is
-            destroyed. Quota and provider details arrive with this app&apos;s own service.
-            Everything works offline without them.
+            Quota and provider details arrive with this app&apos;s own service. Everything works
+            offline without them.
           </ThemedText>
         </Section>
 
         <Button label="Done" variant="plain" onPress={() => router.back()} />
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * Export, import and delete-all (§15.1, §15.2).
+ *
+ * Grouped, and in that order, because §15.2 asks that an export be offered
+ * before anything irreversible. Putting the backup immediately above the
+ * delete is a stronger guarantee than a sentence telling somebody they
+ * should have made one.
+ *
+ * The delete needs a word typed. A second "are you sure" button is answered
+ * by the same reflex that pressed the first; typing is a different action and
+ * cannot be done by accident.
+ */
+function YourDataSection() {
+  const theme = useTheme();
+  const [busy, setBusy] = useState<'export' | 'import' | 'erase' | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState('');
+
+  /** Errors here are shown, never swallowed: a silent failed backup is a lie. */
+  const run = async (
+    which: 'export' | 'import' | 'erase',
+    work: () => Promise<string | null>
+  ) => {
+    setBusy(which);
+    setNote(null);
+    setProblem(null);
+    try {
+      const said = await work();
+      if (said) setNote(said);
+    } catch (failure) {
+      setProblem(failure instanceof Error ? failure.message : 'That did not work.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Section title="Your data">
+      <ThemedText type="small" themeColor="textSecondary">
+        Nothing here is backed up for you — that is the point of keeping it on your phone. An
+        export is how you keep a copy.
+      </ThemedText>
+
+      <Button
+        label="Export…"
+        variant="plain"
+        busy={busy === 'export'}
+        disabled={busy !== null}
+        onPress={() =>
+          run('export', async () => {
+            const done = await exportLedger();
+            return `Exported ${done.bills} bill${done.bills === 1 ? '' : 's'}.`;
+          })
+        }
+      />
+      <ThemedText type="small" themeColor="textSecondary">
+        Writes a backup file you can restore later, plus two spreadsheets for reading. Receipt
+        photographs are not included.
+      </ThemedText>
+
+      <Button
+        label="Import a backup…"
+        variant="plain"
+        busy={busy === 'import'}
+        disabled={busy !== null}
+        onPress={() =>
+          run('import', async () => {
+            const done = await importLedger();
+            if (!done) return null; // The picker was dismissed. Not an error.
+            const added = `Imported ${done.imported} bill${done.imported === 1 ? '' : 's'}`;
+            return done.skipped > 0
+              ? `${added}; ${done.skipped} were already here.`
+              : `${added}.`;
+          })
+        }
+      />
+
+      {!confirming ? (
+        <Button
+          label="Delete everything…"
+          variant="danger"
+          disabled={busy !== null}
+          onPress={() => {
+            setConfirming(true);
+            setNote(null);
+            setProblem(null);
+          }}
+        />
+      ) : (
+        <View style={[styles.confirmBox, { borderColor: theme.danger }]}>
+          <ThemedText type="smallBold">This cannot be undone.</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Every bill, every receipt&apos;s text, your saved questions and the caches built from
+            them. Export first if you have not. Your API keys are kept — clear those above.
+          </ThemedText>
+          <TextField
+            label={`Type ${CONFIRM_PHRASE} to confirm`}
+            value={typed}
+            onChangeText={setTyped}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          <View style={styles.confirmActions}>
+            <Button
+              label="Cancel"
+              variant="plain"
+              onPress={() => {
+                setConfirming(false);
+                setTyped('');
+              }}
+            />
+            <Button
+              label="Delete everything"
+              variant="danger"
+              busy={busy === 'erase'}
+              disabled={!confirmationMatches(typed) || busy !== null}
+              onPress={() =>
+                run('erase', async () => {
+                  const gone = await eraseLedger();
+                  setConfirming(false);
+                  setTyped('');
+                  return `Deleted ${gone.bills} bill${gone.bills === 1 ? '' : 's'}.`;
+                })
+              }
+            />
+          </View>
+        </View>
+      )}
+
+      {note && (
+        <ThemedText type="small" themeColor="success">
+          {note}
+        </ThemedText>
+      )}
+      {problem && (
+        <ThemedText type="small" themeColor="danger" accessibilityRole="alert">
+          {problem}
+        </ThemedText>
+      )}
+    </Section>
   );
 }
 
@@ -494,4 +645,11 @@ const styles = StyleSheet.create({
   stat: { gap: Spacing.half, minWidth: 90 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four },
   switchLabel: { flex: 1, gap: Spacing.half },
+  confirmBox: {
+    gap: Spacing.three,
+    padding: Spacing.four,
+    borderRadius: Radius.medium,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.three },
 });

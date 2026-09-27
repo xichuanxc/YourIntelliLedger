@@ -110,3 +110,39 @@ export function setInsightsCustom(period: { from: string; to: string }): void {
   mmkv().set(KEYS.insightsCustomFrom, period.from);
   mmkv().set(KEYS.insightsCustomTo, period.to);
 }
+
+/**
+ * Forgets every preference, returning the app to its defaults (§15.2).
+ *
+ * Preferences are not spending, but several of them describe it — the
+ * Insights period somebody keeps coming back to, whether they leave map
+ * previews on. An erase that kept them would leave the next user of the
+ * handset looking at the last one's habits.
+ */
+export function clearPreferences(): void {
+  mmkv().clearAll();
+}
+
+/**
+ * Every preference, for the backup (§15.1).
+ *
+ * Keys as stored, not as the UI names them, so a restore into a later build
+ * can still recognise them. Absent keys are simply absent: a preference
+ * never set should come back unset rather than as somebody else's default.
+ */
+export function exportedPreferences(): Record<string, string | number | boolean | null> {
+  const store = mmkv();
+  const out: Record<string, string | number | boolean | null> = {};
+
+  for (const key of Object.values(KEYS)) {
+    const asBoolean = store.getBoolean(key);
+    if (asBoolean !== undefined) {
+      out[key] = asBoolean;
+      continue;
+    }
+    const asString = store.getString(key);
+    if (asString !== undefined) out[key] = asString;
+  }
+
+  return out;
+}

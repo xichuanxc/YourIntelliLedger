@@ -46,3 +46,18 @@ export const catalogCache: CatalogCache = {
     }
   },
 };
+
+/**
+ * Drops the cached data catalogue (§15.2).
+ *
+ * It is derived from the ledger — the shops somebody frequents, the
+ * categories they use — so it outlives a delete-all unless it is cleared
+ * too, and it is precisely a summary of what they buy.
+ */
+export function clearCatalogCache(): void {
+  try {
+    mmkv().clearAll();
+  } catch {
+    // Nothing to lose: the catalogue rebuilds from the ledger on demand.
+  }
+}

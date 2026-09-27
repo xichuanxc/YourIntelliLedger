@@ -79,6 +79,17 @@ jest.mock('@/data/prefs', () => ({
 
 jest.mock('@/data/conversationRepo', () => ({ clearConversation: jest.fn() }));
 
+/**
+ * The boundary between the screen and the platform. Mocking here keeps the
+ * file system, the share sheet and five MMKV stores out of a test about
+ * which buttons appear and when they are allowed to be pressed.
+ */
+jest.mock('@/data/backupFile', () => ({
+  exportLedger: jest.fn(async () => ({ bills: 3, uri: 'file:///tmp/export.json' })),
+  importLedger: jest.fn(async () => ({ imported: 2, skipped: 1 })),
+  eraseLedger: jest.fn(async () => ({ bills: 3, queryLogRows: 0 })),
+}));
+
 const { setSaveAskHistory } = jest.requireMock('@/data/prefs');
 const { clearConversation } = jest.requireMock('@/data/conversationRepo');
 
@@ -273,5 +284,121 @@ describe('saving conversation records', () => {
 
     expect(setSaveAskHistory).toHaveBeenCalledWith(false);
     await waitFor(() => expect(clearConversation).toHaveBeenCalled());
+  });
+});
+
+/**
+ * Export, import and delete-all (§15.1, §15.2).
+ *
+ * The behaviour worth pinning is the gate. §15.2 asks for type-to-confirm
+ * because a second "are you sure" is answered by the same reflex that
+ * pressed the first, so the test that matters is the one proving the delete
+ * cannot fire until the word is typed.
+ */
+describe('your data', () => {
+  const { eraseLedger, exportLedger, importLedger } = jest.requireMock('@/data/backupFile');
+
+  // Counts, not implementations: without this each test inherits the calls
+  // the one before it made, and an assertion that nothing happened passes or
+  // fails on the order the file happens to run in.
+  beforeEach(() => {
+    exportLedger.mockClear();
+    importLedger.mockClear();
+    eraseLedger.mockClear();
+  });
+
+  const reveal = async () => {
+    await draw();
+    await fireEvent.press(screen.getByText('Delete everything…'));
+  };
+
+  it('exports, and says how much went', async () => {
+    await draw();
+
+    await fireEvent.press(screen.getByText('Export…'));
+
+    expect(exportLedger).toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/Exported 3 bills/)).toBeTruthy());
+  });
+
+  /** "Imported 0" and "imported 0, 47 already here" are different outcomes. */
+  it('reports what an import skipped as well as what it added', async () => {
+    await draw();
+
+    await fireEvent.press(screen.getByText('Import a backup…'));
+
+    expect(importLedger).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByText(/Imported 2 bills; 1 were already here/)).toBeTruthy()
+    );
+  });
+
+  /** Dismissing the file picker is not a failure and must not read as one. */
+  it('says nothing when the picker is dismissed', async () => {
+    importLedger.mockResolvedValueOnce(null);
+    await draw();
+
+    await fireEvent.press(screen.getByText('Import a backup…'));
+
+    await waitFor(() => expect(importLedger).toHaveBeenCalled());
+    expect(screen.queryByText(/Imported/)).toBeNull();
+  });
+
+  it('asks before destroying anything', async () => {
+    await draw();
+
+    await fireEvent.press(screen.getByText('Delete everything…'));
+
+    expect(eraseLedger).not.toHaveBeenCalled();
+    expect(screen.getByText('This cannot be undone.')).toBeTruthy();
+  });
+
+  it('will not delete until the word is typed', async () => {
+    await reveal();
+
+    await fireEvent.press(screen.getByText('Delete everything'));
+
+    expect(eraseLedger).not.toHaveBeenCalled();
+  });
+
+  it('refuses a word that is nearly right', async () => {
+    await reveal();
+
+    await fireEvent.changeText(screen.getByLabelText(/Type DELETE/), 'DELET');
+    await fireEvent.press(screen.getByText('Delete everything'));
+
+    expect(eraseLedger).not.toHaveBeenCalled();
+  });
+
+  it('deletes once the word is typed, and reports the count', async () => {
+    await reveal();
+
+    await fireEvent.changeText(screen.getByLabelText(/Type DELETE/), 'DELETE');
+    await fireEvent.press(screen.getByText('Delete everything'));
+
+    await waitFor(() => expect(eraseLedger).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/Deleted 3 bills/)).toBeTruthy());
+  });
+
+  /** Backing out must leave nothing armed behind it. */
+  it('can be cancelled', async () => {
+    await reveal();
+
+    await fireEvent.press(screen.getByText('Cancel'));
+
+    expect(screen.queryByText('This cannot be undone.')).toBeNull();
+    expect(eraseLedger).not.toHaveBeenCalled();
+  });
+
+  /** A failed backup that says nothing is worse than one that says it failed. */
+  it('shows the reason an export failed', async () => {
+    exportLedger.mockRejectedValueOnce(new Error('There are no bills to export yet.'));
+    await draw();
+
+    await fireEvent.press(screen.getByText('Export…'));
+
+    await waitFor(() =>
+      expect(screen.getByText('There are no bills to export yet.')).toBeTruthy()
+    );
   });
 });
