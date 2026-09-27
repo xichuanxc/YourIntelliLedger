@@ -64,6 +64,10 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-camera',
     'expo-image-picker',
+    // §15.1: writing the export to a file and handing it to the share sheet.
+    // `expo-file-system` and `expo-document-picker` autolink and need no
+    // plugin entry; `expo-sharing` does, for the iOS document interaction.
+    'expo-sharing',
     'react-native-document-scanner-plugin',
     // NOT @react-native-ml-kit/text-recognition or /barcode-scanning: neither
     // ships an app.plugin.js (verified against the installed packages) — they
