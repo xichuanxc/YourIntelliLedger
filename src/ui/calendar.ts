@@ -108,6 +108,18 @@ const WEEKLY_TREND_LIMIT_DAYS = 70;
 const MONTHLY_TREND_LIMIT_DAYS = 400;
 
 /**
+ * Past three years, quarters crowd the axis the way months did before them.
+ *
+ * Twelve quarters is already the point where a label has about thirty pixels;
+ * a fourth year pushes past it. Years divide the span by four again, and four
+ * characters fit where five did.
+ *
+ * This is the last rung. A ledger holding more than a decade of receipts is
+ * not what this application is for, and twelve yearly bars covers that.
+ */
+const QUARTERLY_TREND_LIMIT_DAYS = 1200;
+
+/**
  * Which unit a custom period's trend should be counted in.
  *
  * The presets carry their own — "last 4 weeks" is weekly by construction — but
@@ -115,13 +127,26 @@ const MONTHLY_TREND_LIMIT_DAYS = 400;
  * "1 March to 28 March" looking like the four-week preset rather than a single
  * monthly bar.
  */
-export type TrendUnit = 'week' | 'month' | 'quarter';
+export type TrendUnit = 'week' | 'month' | 'quarter' | 'year';
 
 export function trendUnitFor(period: Period): TrendUnit {
   const days = spanDays(period);
   if (days <= WEEKLY_TREND_LIMIT_DAYS) return 'week';
-  return days <= MONTHLY_TREND_LIMIT_DAYS ? 'month' : 'quarter';
+  if (days <= MONTHLY_TREND_LIMIT_DAYS) return 'month';
+  return days <= QUARTERLY_TREND_LIMIT_DAYS ? 'quarter' : 'year';
 }
+
+/**
+ * How many months one bar of a trend covers.
+ *
+ * Weeks are not here: they are counted by a different query and never folded
+ * out of months.
+ */
+export const MONTHS_PER_BAR: Record<Exclude<TrendUnit, 'week'>, number> = {
+  month: 1,
+  quarter: 3,
+  year: 12,
+};
 
 /** The calendar quarter a month falls in, 1 to 4. */
 export function quarterOf(month: string): number {
@@ -147,12 +172,31 @@ export function formatQuarter(month: string): string {
 }
 
 /**
+ * The last month of the year a month sits in.
+ *
+ * Aligned to the calendar for the same reason quarters are: twelve months
+ * counted back from an arbitrary end is not a year anybody names.
+ */
+export function endOfYearMonth(month: string): string {
+  return `${month.slice(0, 4)}-12`;
+}
+
+/** `2026`. Four characters, which is what a crowded axis has room for. */
+export function formatYear(month: string): string {
+  return month.slice(0, 4);
+}
+
+/**
  * How many trend buckets a period covers, for the loader.
  *
  * Whole calendar buckets, counted inclusively — a range from late March to
  * early May touches three months, not the 1.4 its length suggests.
  */
 export function trendCountFor(period: Period, unit: TrendUnit): number {
+  if (unit === 'year') {
+    return Number(period.to.slice(0, 4)) - Number(period.from.slice(0, 4)) + 1;
+  }
+
   if (unit === 'quarter') {
     const [fromYear, fromMonth] = period.from.split('-').map(Number);
     const [toYear, toMonth] = period.to.split('-').map(Number);

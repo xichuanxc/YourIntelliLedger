@@ -9,10 +9,13 @@
  */
 
 import {
+  MONTHS_PER_BAR,
   WEEKDAY_INITIALS,
   endOfQuarterMonth,
+  endOfYearMonth,
   formatQuarter,
   formatRange,
+  formatYear,
   isInMonth,
   monthGrid,
   orderedRange,
@@ -194,5 +197,47 @@ describe('quarterly trends', () => {
   it('labels a quarter shortly', () => {
     expect(formatQuarter('2026-09')).toBe('Q3 26');
     expect(formatQuarter('2027-01')).toBe('Q1 27');
+  });
+});
+
+/**
+ * Years, past three of them — the last rung of the ladder.
+ *
+ * Twelve quarters is already the point where a label has about thirty pixels,
+ * so a fourth year would crowd the axis the way months did before quarters.
+ * Twelve yearly bars covers a decade, which is more ledger than this
+ * application is for.
+ */
+describe('yearly trends', () => {
+  it('stays quarterly for three years', () => {
+    expect(trendUnitFor({ from: d('2024-01-01'), to: d('2026-12-31') })).toBe('quarter');
+  });
+
+  it('switches to years past that', () => {
+    expect(trendUnitFor({ from: d('2022-01-01'), to: d('2026-12-31') })).toBe('year');
+  });
+
+  it('counts whole calendar years, inclusively', () => {
+    expect(trendCountFor({ from: d('2022-06-01'), to: d('2026-02-01') }, 'year')).toBe(5);
+    // Two days apart, but either side of New Year: two years, not one.
+    expect(trendCountFor({ from: d('2026-12-31'), to: d('2027-01-01') }, 'year')).toBe(2);
+  });
+
+  /** Aligned to the calendar: twelve months back from March is not a year. */
+  it.each([
+    ['2026-01', '2026-12'],
+    ['2026-07', '2026-12'],
+    ['2026-12', '2026-12'],
+  ])('ends the year holding %s at %s', (month, expected) => {
+    expect(endOfYearMonth(month)).toBe(expected);
+  });
+
+  it('labels a year in four characters', () => {
+    expect(formatYear('2026-09')).toBe('2026');
+  });
+
+  /** The fold sizes, so a bar is always a whole bucket. */
+  it('knows how many months each bar holds', () => {
+    expect(MONTHS_PER_BAR).toEqual({ month: 1, quarter: 3, year: 12 });
   });
 });

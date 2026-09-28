@@ -42,8 +42,11 @@ import type {
 import { CATEGORY_LABELS } from '@/types/vocabulary';
 import type { BreakdownDimension } from '@/app/insights/breakdown';
 import {
+  MONTHS_PER_BAR,
   endOfQuarterMonth,
+  endOfYearMonth,
   formatQuarter,
+  formatYear,
   trendCountFor,
   trendUnitFor,
   type TrendUnit,
@@ -93,11 +96,26 @@ const RANGES = [
 
 type RangeKey = (typeof RANGES)[number]['value'];
 
+/** Where a unit's last bar must end, so every fold is a whole calendar bucket. */
+const END_OF_BAR: Record<Exclude<TrendUnit, 'week'>, (month: string) => string> = {
+  month: (month) => month,
+  quarter: endOfQuarterMonth,
+  year: endOfYearMonth,
+};
+
+/** What each bar is called. Short, because the axis is crowded. */
+const TREND_LABELS: Record<Exclude<TrendUnit, 'week'>, (month: string) => string> = {
+  month: formatMonthShort,
+  quarter: formatQuarter,
+  year: formatYear,
+};
+
 /** What the trend section calls itself, per unit. */
 const TREND_HEADINGS: Record<TrendUnit, string> = {
   week: 'Week by week',
   month: 'Month by month',
   quarter: 'Quarter by quarter',
+  year: 'Year by year',
 };
 
 /** Four weeks: long enough to hold a shop's rhythm, short enough to read. */
@@ -138,21 +156,26 @@ function rangeOf(key: string) {
 }
 
 /**
- * Three months of trend, as one bar.
+ * Months folded into bigger bars — three to a quarter, twelve to a year.
  *
- * Labelled `Q3 26` rather than `Jul–Sep`, for width. The chart divides its
- * space by the number of bars, so twelve quarters leave each label under
- * thirty pixels — enough for five characters at this font size, and not
- * enough for a month range.
+ * One function rather than one per unit, because the only differences are how
+ * many months a bar holds and what it is called. The labels are short by
+ * necessity: the chart divides its width by the number of bars, so a dozen of
+ * them leave each label under thirty pixels — five characters at this font
+ * size. `Q3 26` fits, `2026` fits, `Jul–Sep` does not.
  */
-function foldIntoQuarters(months: readonly { month: string; totalCents: number }[]): TrendBar[] {
+function foldMonths(
+  months: readonly { month: string; totalCents: number }[],
+  perBar: number,
+  label: (month: string) => string
+): TrendBar[] {
   const bars: TrendBar[] = [];
 
-  for (let start = 0; start < months.length; start += 3) {
-    const group = months.slice(start, start + 3);
+  for (let start = 0; start < months.length; start += perBar) {
+    const group = months.slice(start, start + perBar);
     if (group.length === 0) continue;
     bars.push({
-      label: formatQuarter(group[0].month),
+      label: label(group[0].month),
       totalCents: group.reduce((sum, month) => sum + month.totalCents, 0),
     });
   }
@@ -287,22 +310,17 @@ export default function InsightsScreen() {
               totalCents: week.totalCents,
             }))
           )
-        : trendUnit === 'quarter'
-          ? // Quarters are months folded in threes rather than a second query.
-            // `getMonthlyTrend` already returns whole calendar months in order,
-            // and ending it on a quarter boundary makes every group of three a
-            // real quarter — which is what lets them be labelled as one.
-            getMonthlyTrend(
-              db,
-              trendCount * 3,
-              endOfQuarterMonth(monthOf(trendAnchor))
-            ).then(foldIntoQuarters)
-          : getMonthlyTrend(db, trendCount, monthOf(trendAnchor)).then((months) =>
-              months.map((month) => ({
-                label: formatMonthShort(month.month),
-                totalCents: month.totalCents,
-              }))
-            ),
+        : // Everything longer is months folded into bigger bars rather than a
+          // second query. `getMonthlyTrend` already returns whole calendar
+          // months in order; ending it on a quarter or year boundary makes
+          // every group a real one, which is what lets it be labelled.
+          getMonthlyTrend(
+            db,
+            trendCount * MONTHS_PER_BAR[trendUnit],
+            END_OF_BAR[trendUnit](monthOf(trendAnchor))
+          ).then((months) =>
+            foldMonths(months, MONTHS_PER_BAR[trendUnit], TREND_LABELS[trendUnit])
+          ),
     ]);
 
     setData({
