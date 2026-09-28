@@ -3,7 +3,7 @@ import { openTestDriver } from '../support/sqlite-driver';
 
 import type { SqlDriver } from '@/data/driver';
 import { migrate } from '@/data/migrate';
-import { clearQueryLog, getUsageForMonth, logQuery } from '@/data/telemetryRepo';
+import { clearQueryLog, getResponseTimes, getUsageForMonth, logQuery } from '@/data/telemetryRepo';
 
 let db: SqlDriver;
 
@@ -61,7 +61,11 @@ describe('logQuery (§15.3)', () => {
     // §15.3: diagnostic, not a transcript. Every column is a counter, a code,
     // or a tool name.
     expect(Object.keys(row).sort()).toEqual(
-      ['at', 'error_code', 'id', 'latency_ms', 'model_alias', 'outcome', 'route', 'tokens_in', 'tokens_out', 'tool_calls'].sort()
+      // `first_token_ms` is a duration (§6.8), which is a counter like the
+      // rest. Adding a column here should be a deliberate act, which is why
+      // this list is spelled out rather than derived.
+      ['at', 'error_code', 'first_token_ms', 'id', 'latency_ms', 'model_alias',
+       'outcome', 'route', 'tokens_in', 'tokens_out', 'tool_calls'].sort()
     );
   });
 
@@ -138,5 +142,78 @@ describe('clearQueryLog', () => {
     await logAt('2026-08');
     expect(await clearQueryLog(db)).toBe(2);
     expect(await db.all('SELECT * FROM query_log')).toHaveLength(0);
+  });
+});
+
+/**
+ * The two figures §6.8 asks for (§6.8, §15.3).
+ *
+ * What needs pinning is that they measure different quantities. A fastpath
+ * is timed end to end; an agent turn is timed to its *first token*, because a
+ * turn that calls two tools and writes at length can run fifteen seconds and
+ * still feel immediate. Reporting the total would flatter a slow app and
+ * punish a responsive one.
+ */
+describe('response times (§6.8)', () => {
+  const log = (route: string, latencyMs: number | null, firstTokenMs: number | null) =>
+    db.run(
+      `INSERT INTO query_log (at, route, latency_ms, first_token_ms, outcome)
+       VALUES ('2026-09-28T10:00:00.000Z', ?, ?, ?, 'ok')`,
+      [route, latencyMs, firstTokenMs]
+    );
+
+  it('has nothing to report from an unused app', async () => {
+    expect(await getResponseTimes(db)).toEqual({
+      fastpathCount: 0,
+      agentCount: 0,
+      fastpathP95Ms: null,
+      agentFirstTokenP50Ms: null,
+      agentFirstTokenP95Ms: null,
+    });
+  });
+
+  it('takes the fastpath p95 by nearest rank', async () => {
+    for (const ms of [10, 20, 30, 40, 50, 60, 70, 80, 90, 900]) await log('fastpath', ms, null);
+
+    const times = await getResponseTimes(db);
+
+    expect(times.fastpathCount).toBe(10);
+    // Ceil(0.95 × 10) = 10th of ten: the slow one, which is the point of p95.
+    expect(times.fastpathP95Ms).toBe(900);
+  });
+
+  it('times an agent turn to its first token, not to its end', async () => {
+    await log('agent', 15_000, 800);
+
+    const times = await getResponseTimes(db);
+
+    expect(times.agentFirstTokenP50Ms).toBe(800);
+  });
+
+  /** Null is "no stream happened", and counting it as zero would flatter. */
+  it('ignores turns that never produced a first token', async () => {
+    await log('agent', 4000, null);
+    await log('agent', 4000, 2000);
+
+    const times = await getResponseTimes(db);
+
+    expect(times.agentCount).toBe(1);
+    expect(times.agentFirstTokenP50Ms).toBe(2000);
+  });
+
+  it('keeps the two routes apart', async () => {
+    await log('fastpath', 40, null);
+    await log('agent', 9000, 3000);
+
+    const times = await getResponseTimes(db);
+
+    expect(times.fastpathP95Ms).toBe(40);
+    expect(times.agentFirstTokenP50Ms).toBe(3000);
+  });
+
+  it('reports a single sample as its own percentile', async () => {
+    await log('fastpath', 42, null);
+
+    expect((await getResponseTimes(db)).fastpathP95Ms).toBe(42);
   });
 });

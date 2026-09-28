@@ -358,6 +358,7 @@ export const useAskStore = create<AskState>((set, get) => ({
         tokensOut: turn.log.tokensOut,
         modelAlias: turn.log.modelAlias,
         latencyMs: turn.log.latencyMs,
+        firstTokenMs: turn.log.firstTokenMs,
         errorCode: turn.log.errorCode,
         toolCalls: turn.log.toolCalls.map((call) => call.name),
       });

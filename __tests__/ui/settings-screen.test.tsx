@@ -61,6 +61,15 @@ jest.mock('@/data/telemetryRepo', () => ({
     medianLatencyMs: null,
     failures: 0,
   }),
+  // §6.8's two figures. Nulls, so the screen renders its "ask a few
+  // questions" state rather than numbers this test would have invented.
+  getResponseTimes: async () => ({
+    fastpathCount: 0,
+    agentCount: 0,
+    fastpathP95Ms: null,
+    agentFirstTokenP50Ms: null,
+    agentFirstTokenP95Ms: null,
+  }),
 }));
 
 /** Mutable so a test can start from "already switched on". */

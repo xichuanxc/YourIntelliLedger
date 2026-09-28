@@ -46,7 +46,12 @@ import {
   setVisionParse as setVisionParsePref,
 } from '@/data/prefs';
 import { applyScreenshotPolicy, SCREENSHOT_BLOCKING_SUPPORTED } from '@/data/screenPrivacy';
-import { getUsageForMonth, type UsageSummary } from '@/data/telemetryRepo';
+import {
+  getResponseTimes,
+  getUsageForMonth,
+  type ResponseTimes,
+  type UsageSummary,
+} from '@/data/telemetryRepo';
 import { formatMonth } from '@/data/dates';
 import { Button } from '@/ui/components/button';
 import { Screen } from '@/ui/components/screen';
@@ -71,6 +76,7 @@ export default function SettingsScreen() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [times, setTimes] = useState<ResponseTimes | null>(null);
   const [blockShots, setBlockShots] = useState(false);
   const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
   const [mapPreviews, setMapPreviews] = useState(true);
@@ -94,7 +100,11 @@ export default function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void (async () => setUsage(await getUsageForMonth(await getDb())))();
+      void (async () => {
+        const db = await getDb();
+        setUsage(await getUsageForMonth(db));
+        setTimes(await getResponseTimes(db));
+      })();
     }, [])
   );
 
@@ -448,6 +458,45 @@ export default function SettingsScreen() {
               accessibilityLabel="Map previews"
             />
           </View>
+        </Section>
+
+        <Section title="Speed">
+          <ThemedText type="small" themeColor="textSecondary">
+            Measured from your own use on this device, not from a benchmark. The instant answers
+            aim to land under 100&#8239;ms; the assistant aims to start speaking within four
+            seconds.
+          </ThemedText>
+
+          {times && times.fastpathCount + times.agentCount === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Ask a few questions and the figures will appear here.
+            </ThemedText>
+          ) : (
+            times && (
+              <View style={[styles.usage, { backgroundColor: theme.backgroundElement }]}>
+                <Stat
+                  label={`Instant answers p95 (${times.fastpathCount})`}
+                  value={times.fastpathP95Ms === null ? '—' : `${times.fastpathP95Ms} ms`}
+                />
+                <Stat
+                  label={`Assistant, first words p50 (${times.agentCount})`}
+                  value={
+                    times.agentFirstTokenP50Ms === null
+                      ? '—'
+                      : `${(times.agentFirstTokenP50Ms / 1000).toFixed(1)}s`
+                  }
+                />
+                <Stat
+                  label="Assistant, first words p95"
+                  value={
+                    times.agentFirstTokenP95Ms === null
+                      ? '—'
+                      : `${(times.agentFirstTokenP95Ms / 1000).toFixed(1)}s`
+                  }
+                />
+              </View>
+            )
+          )}
         </Section>
 
         <YourDataSection />

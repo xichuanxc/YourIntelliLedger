@@ -76,6 +76,12 @@ export interface QueryLogDraft {
   route: 'agent';
   outcome: QueryOutcome;
   latencyMs: number;
+  /**
+   * Milliseconds until the model's first streamed character (§6.8), or null
+   * when there was no stream to time — a failed turn, or a transport that
+   * cannot stream. Null means "not applicable", never "instant".
+   */
+  firstTokenMs: number | null;
   tokensIn: number;
   tokensOut: number;
   modelAlias: string;
@@ -140,6 +146,22 @@ export async function runAgentTurn(
   const pendingWrites: PendingWrite[] = [];
   let tokensIn = 0;
   let tokensOut = 0;
+  /**
+   * When the answer began arriving.
+   *
+   * §6.8's target is time to *first token*, not to a finished turn, and the
+   * two diverge badly: a turn that calls two tools and writes at length can
+   * run for fifteen seconds and still feel immediate because text appeared in
+   * one. Wrapping the caller's own callback is how that moment is observed
+   * without the transports having to report it.
+   */
+  let firstDeltaAt: number | null = null;
+  const onDelta: OnDelta | undefined = deps.onDelta
+    ? (raw) => {
+        firstDeltaAt ??= clock();
+        deps.onDelta?.(raw);
+      }
+    : undefined;
   let rejections = 0;
   let toolsOff = false;
 
@@ -160,6 +182,7 @@ export async function runAgentTurn(
         route: 'agent',
         outcome,
         latencyMs: clock() - startedAt,
+        firstTokenMs: firstDeltaAt === null ? null : firstDeltaAt - startedAt,
         tokensIn,
         tokensOut,
         // §13.5: the alias is the only model name the app knows.
@@ -173,7 +196,7 @@ export async function runAgentTurn(
   const ask = async (allowTools: boolean): Promise<ChatReply> => {
     const request = assembleRequest({ catalog: deps.catalog, history: working }, false);
     if (!allowTools) request.tool_choice = 'none';
-    const reply = await deps.transport.chat(request, deps.onDelta);
+    const reply = await deps.transport.chat(request, onDelta);
     tokensIn += reply.meta?.usage?.prompt_tokens ?? 0;
     tokensOut += reply.meta?.usage?.completion_tokens ?? 0;
     return reply;
