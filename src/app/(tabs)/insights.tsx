@@ -99,12 +99,17 @@ const DEFAULT_RANGE = 'w4' satisfies RangeKey;
  */
 const RANGE_OPTIONS = [
   ...RANGES.map(({ value, label }) => ({ value, label })),
+  // Not in RANGES: every entry there is a trailing window of so many weeks or
+  // months, and "All" is not a length at all — it is whatever the ledger
+  // happens to span. It behaves like a hand-picked range whose ends are read
+  // from the data instead of from a calendar.
+  { value: 'all' as const, label: 'All' },
   // `as const`, or this one entry widens the whole array's `value` to
   // `string` and it stops satisfying the menu's option type.
   { value: 'custom' as const, label: 'Custom' },
 ];
 
-type PeriodChoice = RangeKey | 'custom';
+type PeriodChoice = RangeKey | 'all' | 'custom';
 
 function rangeOf(key: string) {
   // Found by name: a positional fallback silently changes meaning the next
@@ -196,10 +201,24 @@ export default function InsightsScreen() {
     const dataRange = await getDataRange(db);
     const anchorDate = dataRange.lastBill ?? todayLocalDate();
 
+    /**
+     * The whole ledger, when "All" is chosen.
+     *
+     * Read from the data rather than left unbounded, so every query below
+     * keeps its existing shape and the header can say which months are
+     * actually covered. An empty ledger has no span to report, so it falls
+     * through to the anchor and the screen shows its empty state.
+     */
+    const everything: Period | null =
+      range === 'all' && dataRange.firstBill && dataRange.lastBill
+        ? { from: dataRange.firstBill, to: dataRange.lastBill }
+        : null;
+
     // Null unless a hand-picked range is the one in force, which keeps the
     // three lines below narrow enough for the type checker and honest about
-    // what is driving the screen.
-    const picked = range === 'custom' ? custom : null;
+    // what is driving the screen. "All" joins it: both are spans rather than
+    // trailing windows, and the trend has to be told their unit.
+    const picked = everything ?? (range === 'custom' ? custom : null);
 
     // "Last week" steps the anchor back a whole week before the window is
     // taken; every other preset ends at the anchor itself.
