@@ -95,6 +95,19 @@ export function spanDays(period: Period): number {
 const WEEKLY_TREND_LIMIT_DAYS = 70;
 
 /**
+ * Past a year, a monthly trend stops being readable.
+ *
+ * The chart sizes its bars by how many there are, so thirteen months leaves
+ * each label about twenty pixels of slot and the month names run into one
+ * another. Quarters divide the same span by three and give each bar room.
+ *
+ * 400 days rather than 365: a range of "the last twelve months" picked by
+ * hand is frequently a day or two over, and stepping it down to quarters for
+ * that would be surprising.
+ */
+const MONTHLY_TREND_LIMIT_DAYS = 400;
+
+/**
  * Which unit a custom period's trend should be counted in.
  *
  * The presets carry their own — "last 4 weeks" is weekly by construction — but
@@ -102,8 +115,35 @@ const WEEKLY_TREND_LIMIT_DAYS = 70;
  * "1 March to 28 March" looking like the four-week preset rather than a single
  * monthly bar.
  */
-export function trendUnitFor(period: Period): 'week' | 'month' {
-  return spanDays(period) <= WEEKLY_TREND_LIMIT_DAYS ? 'week' : 'month';
+export type TrendUnit = 'week' | 'month' | 'quarter';
+
+export function trendUnitFor(period: Period): TrendUnit {
+  const days = spanDays(period);
+  if (days <= WEEKLY_TREND_LIMIT_DAYS) return 'week';
+  return days <= MONTHLY_TREND_LIMIT_DAYS ? 'month' : 'quarter';
+}
+
+/** The calendar quarter a month falls in, 1 to 4. */
+export function quarterOf(month: string): number {
+  return Math.floor((Number(month.slice(5, 7)) - 1) / 3) + 1;
+}
+
+/**
+ * The last month of the quarter a month sits in.
+ *
+ * Quarters are aligned to the calendar, never to the period's end. Counting
+ * three months back from whenever the range happens to stop would produce
+ * buckets like "August to October", which is not a quarter and cannot be
+ * labelled as one.
+ */
+export function endOfQuarterMonth(month: string): string {
+  const lastMonth = quarterOf(month) * 3;
+  return `${month.slice(0, 4)}-${String(lastMonth).padStart(2, '0')}`;
+}
+
+/** `Q3 26` — short enough to survive a crowded axis. */
+export function formatQuarter(month: string): string {
+  return `Q${quarterOf(month)} ${month.slice(2, 4)}`;
 }
 
 /**
@@ -112,7 +152,15 @@ export function trendUnitFor(period: Period): 'week' | 'month' {
  * Whole calendar buckets, counted inclusively — a range from late March to
  * early May touches three months, not the 1.4 its length suggests.
  */
-export function trendCountFor(period: Period, unit: 'week' | 'month'): number {
+export function trendCountFor(period: Period, unit: TrendUnit): number {
+  if (unit === 'quarter') {
+    const [fromYear, fromMonth] = period.from.split('-').map(Number);
+    const [toYear, toMonth] = period.to.split('-').map(Number);
+    const fromQuarter = fromYear * 4 + Math.floor((fromMonth - 1) / 3);
+    const toQuarter = toYear * 4 + Math.floor((toMonth - 1) / 3);
+    return toQuarter - fromQuarter + 1;
+  }
+
   if (unit === 'month') {
     const [fromYear, fromMonth] = period.from.split('-').map(Number);
     const [toYear, toMonth] = period.to.split('-').map(Number);

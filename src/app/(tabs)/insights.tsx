@@ -41,7 +41,13 @@ import type {
 } from '@/types/insights';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
 import type { BreakdownDimension } from '@/app/insights/breakdown';
-import { trendCountFor, trendUnitFor } from '@/ui/calendar';
+import {
+  endOfQuarterMonth,
+  formatQuarter,
+  trendCountFor,
+  trendUnitFor,
+  type TrendUnit,
+} from '@/ui/calendar';
 import { DateRangeField } from '@/ui/components/date-range-field';
 import { DonutBreakdown } from '@/ui/components/donut-breakdown';
 import type { SliceInput } from '@/ui/chartSlices';
@@ -87,6 +93,13 @@ const RANGES = [
 
 type RangeKey = (typeof RANGES)[number]['value'];
 
+/** What the trend section calls itself, per unit. */
+const TREND_HEADINGS: Record<TrendUnit, string> = {
+  week: 'Week by week',
+  month: 'Month by month',
+  quarter: 'Quarter by quarter',
+};
+
 /** Four weeks: long enough to hold a shop's rhythm, short enough to read. */
 const DEFAULT_RANGE = 'w4' satisfies RangeKey;
 
@@ -124,6 +137,29 @@ function rangeOf(key: string) {
   return { ...found, shift: 'shift' in found ? found.shift : 0 };
 }
 
+/**
+ * Three months of trend, as one bar.
+ *
+ * Labelled `Q3 26` rather than `Jul–Sep`, for width. The chart divides its
+ * space by the number of bars, so twelve quarters leave each label under
+ * thirty pixels — enough for five characters at this font size, and not
+ * enough for a month range.
+ */
+function foldIntoQuarters(months: readonly { month: string; totalCents: number }[]): TrendBar[] {
+  const bars: TrendBar[] = [];
+
+  for (let start = 0; start < months.length; start += 3) {
+    const group = months.slice(start, start + 3);
+    if (group.length === 0) continue;
+    bars.push({
+      label: formatQuarter(group[0].month),
+      totalCents: group.reduce((sum, month) => sum + month.totalCents, 0),
+    });
+  }
+
+  return bars;
+}
+
 /** One bar of the trend chart, whichever unit produced it. */
 interface TrendBar {
   /** The axis label — a month abbreviation, or the week's Monday. */
@@ -141,7 +177,7 @@ interface InsightsData {
   period: Period;
   hasAnyBills: boolean;
   /** What the trend is counting, for the section heading. */
-  trendUnit: 'week' | 'month';
+  trendUnit: TrendUnit;
 }
 
 export default function InsightsScreen() {
@@ -251,12 +287,22 @@ export default function InsightsScreen() {
               totalCents: week.totalCents,
             }))
           )
-        : getMonthlyTrend(db, trendCount, monthOf(trendAnchor)).then((months) =>
-            months.map((month) => ({
-              label: formatMonthShort(month.month),
-              totalCents: month.totalCents,
-            }))
-          ),
+        : trendUnit === 'quarter'
+          ? // Quarters are months folded in threes rather than a second query.
+            // `getMonthlyTrend` already returns whole calendar months in order,
+            // and ending it on a quarter boundary makes every group of three a
+            // real quarter — which is what lets them be labelled as one.
+            getMonthlyTrend(
+              db,
+              trendCount * 3,
+              endOfQuarterMonth(monthOf(trendAnchor))
+            ).then(foldIntoQuarters)
+          : getMonthlyTrend(db, trendCount, monthOf(trendAnchor)).then((months) =>
+              months.map((month) => ({
+                label: formatMonthShort(month.month),
+                totalCents: month.totalCents,
+              }))
+            ),
     ]);
 
     setData({
@@ -443,7 +489,7 @@ export default function InsightsScreen() {
               />
             </View>
 
-            <Section title={data.trendUnit === 'week' ? 'Week by week' : 'Month by month'}>
+            <Section title={TREND_HEADINGS[data.trendUnit]}>
               <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
                 <BarChart
                   data={chart.bars}

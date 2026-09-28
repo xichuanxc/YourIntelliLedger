@@ -9,15 +9,18 @@
  */
 
 import {
+  WEEKDAY_INITIALS,
+  endOfQuarterMonth,
+  formatQuarter,
   formatRange,
   isInMonth,
   monthGrid,
   orderedRange,
+  quarterOf,
   spanDays,
   trendCountFor,
   trendUnitFor,
   withinPeriod,
-  WEEKDAY_INITIALS,
 } from '@/ui/calendar';
 import type { LocalDate } from '@/types/ledger';
 
@@ -134,5 +137,62 @@ describe('saying the range back', () => {
 
   it('says a single day once', () => {
     expect(formatRange({ from: d('2026-03-05'), to: d('2026-03-05') })).toBe('5 Mar 2026');
+  });
+});
+
+/**
+ * Quarters, for a period longer than a year.
+ *
+ * The chart divides its width by the number of bars, so thirteen monthly
+ * bars leave each label about twenty pixels and the month names collide.
+ * Folding into quarters is a readability fix, and the thing worth pinning is
+ * that the buckets are *calendar* quarters: counting three months back from
+ * wherever the range stops would give "August to October", which cannot be
+ * labelled as a quarter because it is not one.
+ */
+describe('quarterly trends', () => {
+  it('stays monthly for a year', () => {
+    expect(trendUnitFor({ from: d('2026-01-01'), to: d('2026-12-31') })).toBe('month');
+  });
+
+  /** A hand-picked "last twelve months" often overshoots by a day or two. */
+  it('tolerates a range slightly over a year', () => {
+    expect(trendUnitFor({ from: d('2026-01-01'), to: d('2027-01-20') })).toBe('month');
+  });
+
+  it('switches to quarters past that', () => {
+    expect(trendUnitFor({ from: d('2025-01-01'), to: d('2026-12-31') })).toBe('quarter');
+  });
+
+  it('counts whole calendar quarters, inclusively', () => {
+    // March is Q1 and April is Q2: two quarters, however short the span.
+    expect(trendCountFor({ from: d('2026-03-25'), to: d('2026-04-02') }, 'quarter')).toBe(2);
+    expect(trendCountFor({ from: d('2025-01-01'), to: d('2026-12-31') }, 'quarter')).toBe(8);
+  });
+
+  it.each([
+    ['2026-01', 1],
+    ['2026-03', 1],
+    ['2026-04', 2],
+    ['2026-09', 3],
+    ['2026-12', 4],
+  ])('puts %s in quarter %i', (month, expected) => {
+    expect(quarterOf(month)).toBe(expected);
+  });
+
+  /** Aligned to the calendar, so every fold of three is a real quarter. */
+  it.each([
+    ['2026-01', '2026-03'],
+    ['2026-05', '2026-06'],
+    ['2026-08', '2026-09'],
+    ['2026-10', '2026-12'],
+  ])('ends the quarter holding %s at %s', (month, expected) => {
+    expect(endOfQuarterMonth(month)).toBe(expected);
+  });
+
+  /** Five characters, because a crowded axis has room for little more. */
+  it('labels a quarter shortly', () => {
+    expect(formatQuarter('2026-09')).toBe('Q3 26');
+    expect(formatQuarter('2027-01')).toBe('Q1 27');
   });
 });
