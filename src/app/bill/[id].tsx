@@ -13,6 +13,7 @@ import {
 
 import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
+import { grocerSearchUrl } from '@/data/grocerSearch';
 import { deleteBill, getBill, markBillReviewed } from '@/data/ledgerRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
 import { getMapPreviews } from '@/data/prefs';
@@ -240,9 +241,21 @@ function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
       ? ` at ${formatMoney(item.unitPriceCents, currency)}/${UNIT_LABELS[item.unit]}`
       : '';
 
+  // Demo (§4.14-adjacent): what is this costing elsewhere today? Only offered
+  // when the line has words to search for — a row whose name never parsed has
+  // nothing to ask about.
+  const priceCheck = grocerSearchUrl(item);
+
   return (
-    <View
-      style={[styles.item, { borderColor: theme.border }]}
+    <Pressable
+      onPress={priceCheck ? () => void Linking.openURL(priceCheck) : undefined}
+      disabled={!priceCheck}
+      accessibilityRole={priceCheck ? 'link' : undefined}
+      accessibilityHint={priceCheck ? 'Compares prices on grocer.nz' : undefined}
+      style={({ pressed }) => [
+        styles.item,
+        { borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
+      ]}
       accessibilityLabel={`${item.name}, ${quantity}, ${formatMoney(item.priceCents, currency)}`}>
       <View style={styles.itemMain}>
         <ThemedText numberOfLines={2}>{item.name}</ThemedText>
@@ -263,8 +276,13 @@ function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
             Illegible
           </ThemedText>
         )}
+        {priceCheck && (
+          <ThemedText type="small" themeColor="primary">
+            Compare ›
+          </ThemedText>
+        )}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
