@@ -10,19 +10,28 @@
 import { grocerSearchTerm, grocerSearchUrl } from '@/data/grocerSearch';
 
 describe('what to search for', () => {
-  it('uses the name as the receipt printed it', () => {
+  it('sends a short name unchanged', () => {
     expect(grocerSearchTerm({ name: 'Green Valley 2 Ltr' })).toBe('Green Valley 2 Ltr');
   });
 
-  /** A till uses punctuation as a separator, not as meaning. */
-  it('turns till punctuation into spaces', () => {
-    expect(grocerSearchTerm({ name: 'Janola Pwm C/Tg Eoc 750Ml' })).toBe(
-      'Janola Pwm C Tg Eoc 750Ml'
+  /**
+   * The case this narrowing exists for. Sending all six words searches for
+   * the till's contractions too, and a product matching one real word out of
+   * six ranks below one matching two of its own.
+   */
+  it('drops the abbreviations a till pads a line with', () => {
+    expect(grocerSearchTerm({ name: 'Janola Pwm C/Tg Eoc 750Ml' })).toBe('Janola Pwm Eoc 750Ml');
+  });
+
+  it('keeps only the leading words, which are the identifying ones', () => {
+    expect(grocerSearchTerm({ name: 'Anchor Milk Blue Top Plastic Bottle' })).toBe(
+      'Anchor Milk Blue Top'
     );
   });
 
-  it('keeps the size, which is half of what identifies a product', () => {
-    expect(grocerSearchTerm({ name: "PAK'nSAVE Milk 2L" })).toContain('2L');
+  /** A size separates three milks that share every other word. */
+  it('keeps a size however short it is', () => {
+    expect(grocerSearchTerm({ name: 'Milk Standard Blue 2L' })).toContain('2L');
   });
 
   it('collapses the gaps a receipt leaves behind', () => {
@@ -32,6 +41,11 @@ describe('what to search for', () => {
   /** A mangled OCR line must not become a paragraph of query string. */
   it('caps a runaway name', () => {
     expect(grocerSearchTerm({ name: 'x'.repeat(200) }).length).toBeLessThanOrEqual(60);
+  });
+
+  /** A poor query beats no query, so a line of fragments still searches. */
+  it('falls back to the fragments when nothing else survives', () => {
+    expect(grocerSearchTerm({ name: 'Pw C/Tg' })).toBe('Pw C Tg');
   });
 
   it('has nothing to search for in a nameless line', () => {

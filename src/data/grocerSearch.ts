@@ -37,10 +37,44 @@
 const GROCER_SEARCH = 'https://grocer.nz/search';
 
 /**
+ * How many words to send.
+ *
+ * A till prints the identifying words first and pads the rest: the brand and
+ * the product lead, the abbreviated qualifiers follow. `Anchor Milk Blue Top
+ * Plastic B` is recognisable from its first four words and no clearer for the
+ * last two.
+ *
+ * This also suits how grocer searches. Meilisearch's default strategy drops
+ * query words from the *end* until it finds results, so a leading word is
+ * load-bearing and a trailing one is nearly free -- but every extra word
+ * still competes for the ranking, and sending six when four identify the
+ * product buries the match.
+ */
+const MAX_WORDS = 4;
+
+/**
+ * Fragments shorter than this are a till's abbreviations, not words.
+ *
+ * `Janola Pwm C/Tg Eoc 750Ml` carries one word a shopper would recognise and
+ * three contractions that mean nothing to a search engine -- they match no
+ * product and dilute the ranking of the one word that does. Three characters
+ * is the cut: it keeps `Tea`, `Oil` and `Ham`, and drops `Pwm`, `Tg` and `B`.
+ */
+const MIN_WORD_LENGTH = 3;
+
+/**
  * Long enough for a shop name and a size, short enough that a mangled OCR
  * line cannot turn into a paragraph of query string.
  */
 const MAX_TERM_LENGTH = 60;
+
+/** A word worth sending: long enough to mean something, or a size. */
+function isSearchable(word: string): boolean {
+  // A size is short and highly identifying -- 2L separates three milks that
+  // share every other word -- so it is kept whatever its length.
+  if (/\d/.test(word)) return true;
+  return word.length >= MIN_WORD_LENGTH;
+}
 
 /**
  * What to search for, from what the receipt printed.
@@ -50,16 +84,26 @@ const MAX_TERM_LENGTH = 60;
  * it is the more faithful record of the receipt.
  *
  * Punctuation becomes spaces because tills use it as a separator, not as
- * meaning — `C/Tg` is two fragments, not a fraction. Nothing else is
- * stripped: the abbreviations are what the receipt says, and guessing which
- * fragments are noise would throw away the distinctive ones.
+ * meaning — `C/Tg` is two fragments, not a fraction.
+ *
+ * Then the line is cut to the words that identify the product: the till's
+ * own contractions are dropped and only the leading few are kept. Sending
+ * the whole line searches for the abbreviations too, and a product that
+ * matches one real word out of six ranks below one that matches two of its
+ * own — so the noise does not merely fail to help, it actively buries the
+ * answer.
+ *
+ * If nothing survives the filter the original words are used instead: a line
+ * of nothing but short fragments is a poor query, and no query is worse.
  */
 export function grocerSearchTerm(item: { name: string }): string {
-  return item.name
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim()
-    .slice(0, MAX_TERM_LENGTH)
-    .trim();
+  const words = item.name.replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+
+  const meaningful = words.filter(isSearchable);
+  const chosen = (meaningful.length > 0 ? meaningful : words).slice(0, MAX_WORDS);
+
+  return chosen.join(' ').slice(0, MAX_TERM_LENGTH).trim();
 }
 
 /** The URL to open, or null when the line has no words to search for. */
