@@ -38,10 +38,12 @@ import { getDb } from '@/data/db';
 import {
   getBlockScreenshots,
   getMapPreviews,
+  getPriceLookup,
   setBlockScreenshots,
   getVisionParse,
   getSaveAskHistory,
   setMapPreviews as setMapPreviewsPref,
+  setPriceLookup as setPriceLookupPref,
   setSaveAskHistory as setSaveAskHistoryPref,
   setVisionParse as setVisionParsePref,
 } from '@/data/prefs';
@@ -80,6 +82,7 @@ export default function SettingsScreen() {
   const [blockShots, setBlockShots] = useState(false);
   const [screenshotNote, setScreenshotNote] = useState<string | null>(null);
   const [mapPreviews, setMapPreviews] = useState(true);
+  const [priceLookup, setPriceLookup] = useState(true);
   const [visionParse, setVisionParse] = useState(false);
   const [saveHistory, setSaveHistory] = useState(false);
 
@@ -93,6 +96,7 @@ export default function SettingsScreen() {
       setModel(await getByokModel());
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
+      setPriceLookup(getPriceLookup());
       setVisionParse(getVisionParse());
       setSaveHistory(getSaveAskHistory());
     })();
@@ -456,6 +460,26 @@ export default function SettingsScreen() {
                 setMapPreviewsPref(value);
               }}
               accessibilityLabel="Map previews"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={styles.switchLabel}>
+              <ThemedText>Compare prices</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Lets you tap a line on a bill to see what that product costs around the country
+                today, on grocer.nz. Nothing is sent until you tap, and what is sent is a few words
+                of the product name — never the price you paid, the shop, or anything else from the
+                bill.
+              </ThemedText>
+            </View>
+            <Switch
+              value={priceLookup}
+              onValueChange={(value) => {
+                setPriceLookup(value);
+                setPriceLookupPref(value);
+              }}
+              accessibilityLabel="Compare prices on grocer.nz"
             />
           </View>
         </Section>

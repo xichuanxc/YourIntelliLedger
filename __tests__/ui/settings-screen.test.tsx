@@ -80,6 +80,8 @@ jest.mock('@/data/prefs', () => ({
   setBlockScreenshots: jest.fn(),
   getMapPreviews: () => true,
   setMapPreviews: jest.fn(),
+  getPriceLookup: () => true,
+  setPriceLookup: jest.fn(),
   getVisionParse: () => false,
   setVisionParse: jest.fn(),
   getSaveAskHistory: () => mockPrefs.saveHistory,
@@ -99,7 +101,7 @@ jest.mock('@/data/backupFile', () => ({
   eraseLedger: jest.fn(async () => ({ bills: 3, queryLogRows: 0 })),
 }));
 
-const { setSaveAskHistory } = jest.requireMock('@/data/prefs');
+const { setSaveAskHistory, setPriceLookup } = jest.requireMock('@/data/prefs');
 const { clearConversation } = jest.requireMock('@/data/conversationRepo');
 
 jest.mock('@/data/screenPrivacy', () => ({
@@ -293,6 +295,32 @@ describe('saving conversation records', () => {
 
     expect(setSaveAskHistory).toHaveBeenCalledWith(false);
     await waitFor(() => expect(clearConversation).toHaveBeenCalled());
+  });
+});
+
+/**
+ * The grocer.nz price lookup.
+ *
+ * Nothing leaves the device until a line is tapped, which is why the switch
+ * can default to on — but it is still a shop learning what somebody bought,
+ * so the switch has to exist and has to be written the moment it moves.
+ */
+describe('comparing prices', () => {
+  const COMPARE = 'Compare prices on grocer.nz';
+
+  it('is on unless it is switched off', async () => {
+    await draw();
+
+    // `on` rather than `value`: that is the prop the host switch is given.
+    expect(screen.getByLabelText(COMPARE).props.on).toBe(true);
+  });
+
+  it('is written the moment it is switched off', async () => {
+    await draw();
+
+    await fireEvent(screen.getByLabelText(COMPARE), 'valueChange', false);
+
+    expect(setPriceLookup).toHaveBeenCalledWith(false);
   });
 });
 

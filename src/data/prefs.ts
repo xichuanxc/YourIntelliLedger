@@ -26,6 +26,8 @@ const KEYS = {
   mapPreviews: 'privacy.mapPreviews',
   /** Send the receipt photograph to the model, not only the OCR text (§5.1). */
   visionParse: 'parse.vision',
+  /** Whether a line on a bill offers to look its price up on grocer.nz. */
+  priceLookup: 'privacy.priceLookup',
   /** Keep the Ask conversation across launches (§6) — see `conversationRepo`. */
   saveAskHistory: 'ask.saveHistory',
   /** The Insights period, so the screen opens where it was left. */
@@ -55,6 +57,20 @@ export function getMapPreviews(): boolean {
 
 export function setMapPreviews(value: boolean): void {
   mmkv().set(KEYS.mapPreviews, value);
+}
+
+export function getPriceLookup(): boolean {
+  // On by default, which is a weaker claim than it looks: nothing leaves the
+  // device until somebody taps a line, and what leaves then is a few words of
+  // a product name, in a browser, to a site they can see they are visiting.
+  // The switch is here because that is still a shop learning what is on
+  // somebody's receipt, and because a row that silently opens a browser is
+  // worth being able to turn off.
+  return mmkv().getBoolean(KEYS.priceLookup) ?? true;
+}
+
+export function setPriceLookup(value: boolean): void {
+  mmkv().set(KEYS.priceLookup, value);
 }
 
 export function getVisionParse(): boolean {

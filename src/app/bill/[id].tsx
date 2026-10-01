@@ -16,7 +16,7 @@ import { getDb } from '@/data/db';
 import { grocerSearchUrl } from '@/data/grocerSearch';
 import { deleteBill, getBill, markBillReviewed } from '@/data/ledgerRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
-import { getMapPreviews } from '@/data/prefs';
+import { getMapPreviews, getPriceLookup } from '@/data/prefs';
 import type { BillItem, BillWithItems } from '@/types/ledger';
 import { CATEGORY_LABELS, UNIT_LABELS } from '@/types/vocabulary';
 import { Button } from '@/ui/components/button';
@@ -241,10 +241,15 @@ function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
       ? ` at ${formatMoney(item.unitPriceCents, currency)}/${UNIT_LABELS[item.unit]}`
       : '';
 
-  // Demo (§4.14-adjacent): what is this costing elsewhere today? Only offered
-  // when the line has words to search for — a row whose name never parsed has
-  // nothing to ask about.
-  const priceCheck = grocerSearchUrl(item);
+  // Read once, on mount, for the reason `AddressCard` reads its own switch
+  // that way: a bill already on screen should not rearrange itself behind
+  // somebody coming back from Settings.
+  const [lookupOn] = useState(getPriceLookup);
+
+  // Demo (§4.14-adjacent): what is this costing elsewhere today? Offered only
+  // when the switch is on and the line has words to search for — a row whose
+  // name never parsed has nothing to ask about.
+  const priceCheck = lookupOn ? grocerSearchUrl(item) : null;
 
   return (
     <Pressable
