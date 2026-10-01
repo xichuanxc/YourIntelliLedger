@@ -28,6 +28,7 @@ import { getDb } from '@/data/db';
 import { getBill } from '@/data/ledgerRepo';
 import { formatMoney } from '@/data/money';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
+import { headlineCase } from '@/ui/headlineCase';
 import { Button } from '@/ui/components/button';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
@@ -71,7 +72,7 @@ export function ConfirmationCard({ write, summary, onApply }: ConfirmationCardPr
         if (cancelled) return;
         setSubject(
           bill
-            ? `${bill.merchant ?? 'Unnamed shop'} · ${formatDate(bill.purchasedAt)} · ` +
+            ? `${bill.merchant ? headlineCase(bill.merchant) : 'Unnamed shop'} · ${formatDate(bill.purchasedAt)} · ` +
               `${formatMoney(bill.totalCents, bill.currency)} · ${bill.items.length} item${bill.items.length === 1 ? '' : 's'}`
             : 'That bill is no longer in your ledger.'
         );

@@ -25,6 +25,7 @@ import { EmptyState } from '@/ui/components/empty-state';
 import { ClearDataIcon, LoadSamplesIcon } from '@/ui/components/dev-icons';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
 import { GearIcon } from '@/ui/components/gear-icon';
+import { headlineCase } from '@/ui/headlineCase';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useExitConfirm } from '@/ui/hooks/use-exit-confirm';
@@ -151,6 +152,7 @@ export default function LedgerScreen() {
 
 function BillRow({ bill }: { bill: BillSummary }) {
   const theme = useTheme();
+  const merchant = bill.merchant ? headlineCase(bill.merchant) : 'Unnamed merchant';
   const itemSummary =
     bill.itemCount === 0 ? 'No itemised lines' : `${bill.itemCount} item${bill.itemCount === 1 ? '' : 's'}`;
 
@@ -158,14 +160,14 @@ function BillRow({ bill }: { bill: BillSummary }) {
     <Pressable
       onPress={() => router.push(`/bill/${bill.id}`)}
       accessibilityRole="button"
-      accessibilityLabel={`${bill.merchant ?? 'Unnamed merchant'}, ${formatDate(bill.purchasedAt)}, ${formatMoney(bill.totalCents, bill.currency)}, ${itemSummary}`}
+      accessibilityLabel={`${merchant}, ${formatDate(bill.purchasedAt)}, ${formatMoney(bill.totalCents, bill.currency)}, ${itemSummary}`}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? theme.backgroundSelected : theme.backgroundElement },
       ]}>
       <View style={styles.rowMain}>
         <ThemedText numberOfLines={1} style={styles.merchant}>
-          {bill.merchant ?? 'Unnamed merchant'}
+          {merchant}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {formatDate(bill.purchasedAt)} · {itemSummary}

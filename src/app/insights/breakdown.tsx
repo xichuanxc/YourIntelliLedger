@@ -35,6 +35,7 @@ import { ChevronRightIcon } from '@/ui/components/chevron-icon';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
+import { headlineCase } from '@/ui/headlineCase';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { Radius, Spacing } from '@/ui/theme';
 
@@ -145,8 +146,10 @@ export default function BreakdownScreen() {
               <Row
                 key={`${row.billId}-${row.name}-${index}`}
                 onPress={() => openBill(row.billId)}
-                title={row.name}
-                subtitle={`${formatDate(row.purchasedAt)} · ${row.merchant ?? 'Unnamed merchant'} · ${formatQuantity(row.qty)} ${UNIT_LABELS[row.unit]}`}
+                title={headlineCase(row.name)}
+                subtitle={`${formatDate(row.purchasedAt)} · ${
+                  row.merchant ? headlineCase(row.merchant) : 'Unnamed merchant'
+                } · ${formatQuantity(row.qty)} ${UNIT_LABELS[row.unit]}`}
                 amount={
                   row.priceCents == null ? null : formatMoney(row.priceCents, currency)
                 }
@@ -169,7 +172,7 @@ export default function BreakdownScreen() {
               <Row
                 key={row.billId}
                 onPress={() => openBill(row.billId)}
-                title={row.merchant ?? 'Unnamed merchant'}
+                title={row.merchant ? headlineCase(row.merchant) : 'Unnamed merchant'}
                 subtitle={`${formatDate(row.purchasedAt)} · ${formatMoney(row.totalCents, currency)} total, ${
                   row.itemisedCents === 0
                     ? 'no items'

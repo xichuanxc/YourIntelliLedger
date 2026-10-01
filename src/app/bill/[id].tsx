@@ -26,6 +26,7 @@ import { MapPinIcon, NavigateIcon } from '@/ui/components/map-icons';
 import { MapPreview } from '@/ui/components/map-preview';
 import { Screen } from '@/ui/components/screen';
 import { ThemedText } from '@/ui/components/themed-text';
+import { headlineCase } from '@/ui/headlineCase';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { useLedgerStore } from '@/ui/stores/ledger-store';
 import { Radius, Spacing } from '@/ui/theme';
@@ -104,7 +105,9 @@ export default function BillDetailScreen() {
     <Screen edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.summary}>
-          <ThemedText type="title">{bill.merchant ?? 'Unnamed merchant'}</ThemedText>
+          <ThemedText type="title">
+            {bill.merchant ? headlineCase(bill.merchant) : 'Unnamed merchant'}
+          </ThemedText>
           <ThemedText themeColor="textSecondary">
             {formatDate(bill.purchasedAt)}
             {bill.purchasedTime ? ` at ${bill.purchasedTime}` : ''}
@@ -235,6 +238,7 @@ function AddressCard({ address }: { address: string }) {
 
 function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
   const theme = useTheme();
+  const name = headlineCase(item.name);
   const quantity = `${formatQuantity(item.qty)} ${UNIT_LABELS[item.unit]}`;
   const rate =
     item.unitPriceCents != null
@@ -261,12 +265,12 @@ function ItemRow({ item, currency }: { item: BillItem; currency: string }) {
         styles.item,
         { borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
       ]}
-      accessibilityLabel={`${item.name}, ${quantity}, ${formatMoney(item.priceCents, currency)}`}>
+      accessibilityLabel={`${name}, ${quantity}, ${formatMoney(item.priceCents, currency)}`}>
       <View style={styles.itemMain}>
-        <ThemedText numberOfLines={2}>{item.name}</ThemedText>
+        <ThemedText numberOfLines={2}>{name}</ThemedText>
         {item.nameLocal && (
           <ThemedText type="small" themeColor="textSecondary">
-            {item.nameLocal}
+            {headlineCase(item.nameLocal)}
           </ThemedText>
         )}
         <ThemedText type="small" themeColor="textSecondary">

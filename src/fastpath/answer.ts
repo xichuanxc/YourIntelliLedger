@@ -40,6 +40,7 @@ import type { FastpathIntent } from '@/fastpath/match';
 import type { PhrasePeriod } from '@/fastpath/datePhrase';
 import type { LocalDate } from '@/types/ledger';
 import { CATEGORY_LABELS } from '@/types/vocabulary';
+import { headlineCase } from '@/ui/headlineCase';
 
 export interface FastpathContext {
   db: SqlDriver;
@@ -214,7 +215,8 @@ async function answerMerchant(
     envelope: {
       text:
         `You spent ${formatMoney(hit.totalCents, summary.currency)} at ` +
-        `${hit.merchant ?? intent.term} ${window.label}, across ${plural(hit.billCount, 'bill')}.`,
+        `${headlineCase(hit.merchant ?? intent.term)} ${window.label}, ` +
+        `across ${plural(hit.billCount, 'bill')}.`,
     },
     references: [],
   };
@@ -228,7 +230,7 @@ async function answerRecentBills(
   if (bills.length === 0) return NO_BILLS;
 
   const lines = bills.map((bill) => {
-    const shop = bill.merchant ?? 'an unnamed shop';
+    const shop = bill.merchant ? headlineCase(bill.merchant) : 'an unnamed shop';
     return `• ${formatDayMonth(bill.purchasedAt)} — ${shop}: ${formatMoney(bill.totalCents, bill.currency)}`;
   });
 
@@ -239,7 +241,7 @@ async function answerRecentBills(
     // A list names real bills, so each shop can lead to its receipt.
     references: bills
       .filter((bill): bill is typeof bill & { merchant: string } => bill.merchant !== null)
-      .map((bill) => ({ billId: bill.id, label: bill.merchant })),
+      .map((bill) => ({ billId: bill.id, label: headlineCase(bill.merchant) })),
   };
 }
 
@@ -334,13 +336,13 @@ async function answerTopMerchant(
   return {
     envelope: {
       text:
-        `You spent most at ${top.merchant} ${window.label} — ` +
+        `You spent most at ${headlineCase(top.merchant)} ${window.label} — ` +
         `${formatMoney(top.totalCents, summary.currency)} across ${plural(top.billCount, 'bill')}.`,
       render: moneyChart(
         'bar',
         `Spending by shop, ${window.label}`,
         summary.currency,
-        named.map((entry) => entry.merchant as string),
+        named.map((entry) => headlineCase(entry.merchant as string)),
         named.map((entry) => entry.totalCents)
       ),
     },

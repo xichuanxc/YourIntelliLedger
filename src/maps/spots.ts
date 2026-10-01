@@ -24,6 +24,7 @@
 
 import type { GeoPoint } from '@/maps/geocode';
 import type { MerchantLocation } from '@/types/insights';
+import { headlineCase } from '@/ui/headlineCase';
 
 /**
  * How close two addresses must land to share a pin.
@@ -73,7 +74,11 @@ export function mergeSpots(entries: readonly LocatedMerchant[]): MappedSpot[] {
 
   for (const { location, point } of entries) {
     const key = `${point.lat.toFixed(COINCIDENT_DP)},${point.lon.toFixed(COINCIDENT_DP)}`;
-    const name = location.merchant ?? UNNAMED;
+    // Cased here, where the places are named, rather than in the three
+    // things that read a spot's name — the chip, the accessibility label and
+    // the drill-down heading. Chain detection is case-insensitive, so
+    // `shortMerchantName` is unaffected by being handed the cased form.
+    const name = location.merchant ? headlineCase(location.merchant) : UNNAMED;
     const part = { name, cents: location.totalCents, norm: location.merchantNorm };
 
     const existing = places.get(key);

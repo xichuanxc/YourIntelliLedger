@@ -61,6 +61,7 @@ import { SelectMenu } from '@/ui/components/select-menu';
 import { StatTile } from '@/ui/components/stat-tile';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
+import { headlineCase } from '@/ui/headlineCase';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { MaxContentWidth, Radius, Spacing } from '@/ui/theme';
 
@@ -413,7 +414,11 @@ export default function InsightsScreen() {
 
   const merchantEntries: SliceInput[] = merchants.map((merchant) => ({
     key: merchant.merchantNorm ?? 'unnamed',
-    label: merchant.merchant ?? 'Unnamed merchant',
+    // Cased here rather than at each of the three places it is drawn — the
+    // legend, the map chip and the drill-down's heading all take this label,
+    // and `shortMerchantName` matches chains case-insensitively, so it is
+    // unaffected by arriving in headline case.
+    label: merchant.merchant ? headlineCase(merchant.merchant) : 'Unnamed merchant',
     valueCents: merchant.totalCents,
   }));
 
