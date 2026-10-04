@@ -51,6 +51,18 @@ jest.mock('@/agent/byokKey', () => ({
   maskKey: (key: string) => (key.length <= 8 ? '••••' : `${key.slice(0, 4)}…${key.slice(-4)}`),
 }));
 
+/**
+ * The keys a demo build was compiled with. A getter, so a test can decide
+ * whether this build is one of those or an ordinary release.
+ */
+const demoKeys: string[] = [];
+
+jest.mock('@/ui/devKeys', () => ({
+  get DEMO_KEYS() {
+    return demoKeys;
+  },
+}));
+
 jest.mock('@/data/db', () => ({ getDb: async () => ({}) }));
 
 jest.mock('@/data/telemetryRepo', () => ({
@@ -155,6 +167,7 @@ beforeEach(() => {
   store.receipt = 'AIzaRECEIPTkey0001';
   store.ask = null;
   store.model = null;
+  demoKeys.length = 0;
   mockPrefs.saveHistory = false;
   setSaveAskHistory.mockClear();
   clearConversation.mockClear();
@@ -264,6 +277,44 @@ describe('the receipts key', () => {
     await press('Save');
 
     await waitFor(() => expect(store.receipt).toBe('AIzaNEWreceipt2222'));
+  });
+});
+
+/**
+ * The keys a demo build may carry (§8.2).
+ *
+ * Typing a provider key into a phone is unpleasant and iOS has no way to do
+ * it from the laptop, so a build made for a demonstration can hold one. The
+ * test that matters is the other one: an ordinary build must not offer this
+ * at all, which is what keeps "no API keys in the app binary" true of every
+ * build anybody else could install.
+ */
+describe('a key compiled into a demo build', () => {
+  const KEY_PICKER = 'Use a build-in key';
+
+  it('is not offered at all in an ordinary build', async () => {
+    await draw();
+
+    expect(screen.queryByLabelText(KEY_PICKER)).toBeNull();
+  });
+
+  it('saves the key that was chosen', async () => {
+    demoKeys.push('AQ.DEMOkeyONE000000000000000000000000000000000000000');
+    await draw();
+
+    await press(KEY_PICKER);
+    await press('Key 1 · AQ.D…0000');
+
+    await waitFor(() => expect(store.receipt).toBe(demoKeys[0]));
+  });
+
+  it('shows each key masked, never in full', async () => {
+    demoKeys.push('AQ.DEMOkeyONE000000000000000000000000000000000000111');
+    await draw();
+
+    await press(KEY_PICKER);
+
+    expect(screen.queryByText(demoKeys[0])).toBeNull();
   });
 });
 

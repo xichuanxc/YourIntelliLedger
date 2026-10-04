@@ -57,6 +57,7 @@ import {
 import { modelForAlias } from '@/agent/modelConfig';
 import { formatMonth } from '@/data/dates';
 import { Button } from '@/ui/components/button';
+import { DEMO_KEYS } from '@/ui/devKeys';
 import { Screen } from '@/ui/components/screen';
 import { SelectMenu, type SelectMenuOption } from '@/ui/components/select-menu';
 import { TextField } from '@/ui/components/text-field';
@@ -259,6 +260,32 @@ export default function SettingsScreen() {
           <ThemedText type="smallBold">
             {existing ? `Key set — ${maskKey(existing)}` : 'No key set'}
           </ThemedText>
+
+          {/* Only in a build that was handed keys — see `devKeys.ts`. Shown
+              masked, because a demonstration is often also a screen
+              recording. */}
+          {DEMO_KEYS.length > 0 && (
+            <SelectMenu
+              label="Use a build-in key"
+              options={[
+                { value: '', label: 'Choose a key', caption: 'Compiled into this demo build' },
+                ...DEMO_KEYS.map((key, index) => ({
+                  value: key,
+                  label: `Key ${index + 1} · ${maskKey(key)}`,
+                })),
+              ]}
+              value=""
+              onChange={(key) => {
+                if (key === '') return;
+                void (async () => {
+                  await setByokKey(key);
+                  setExisting(await getByokKey());
+                  setAskKeyState(await getAskKey());
+                  setStatus('Saved.');
+                })();
+              }}
+            />
+          )}
 
           <TextField
             label={existing ? 'Replace key' : 'Provider API key'}
