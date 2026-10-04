@@ -113,7 +113,12 @@ export function DonutBreakdown({
 
       <View style={styles.legend}>
         {slices.map((slice, index) => {
-          const description = `${slice.label}, ${formatMoney(slice.valueCents, currency)}, ${percentages[index]} percent`;
+          // The tail names what it holds, in the description as well as on
+          // screen: "Everything else" is otherwise a figure nobody can check.
+          const members = slice.members?.join(', ');
+          const description =
+            `${slice.label}, ${formatMoney(slice.valueCents, currency)}, ` +
+            `${percentages[index]} percent${members ? `, made up of ${members}` : ''}`;
           // The folded tail is several categories wearing one label; there is
           // no single list of anything behind it.
           const selectable = onSelect !== undefined && !slice.folded;
@@ -141,8 +146,15 @@ export function DonutBreakdown({
 
           if (!selectable) {
             return (
-              <View key={slice.key} style={styles.legendRow} accessibilityRole="text" accessibilityLabel={description}>
-                {content}
+              <View key={slice.key} style={styles.legendGroup}>
+                <View style={styles.legendRow} accessibilityRole="text" accessibilityLabel={description}>
+                  {content}
+                </View>
+                {members && (
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.members}>
+                    {members}
+                  </ThemedText>
+                )}
               </View>
             );
           }
@@ -173,6 +185,9 @@ const styles = StyleSheet.create({
   chartRow: { alignItems: 'center' },
   centre: { alignItems: 'center' },
   legend: { gap: Spacing.two },
+  legendGroup: { gap: Spacing.one },
+  /* Indented past the swatch, so it reads as belonging to the row above. */
+  members: { paddingLeft: Spacing.five },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   /**
    * Vertical padding pulled out of the row gap so a tappable row clears the

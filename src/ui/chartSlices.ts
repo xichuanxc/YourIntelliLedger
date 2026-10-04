@@ -39,6 +39,16 @@ export interface Slice extends SliceInput {
   mergedCount: number;
   /** True for the aggregated tail, so callers can caption it. */
   folded?: boolean;
+  /**
+   * What the tail stands for, biggest first — set only on the folded slice.
+   *
+   * Without it the wedge is unaccountable. "Everything else (2)" names a sum
+   * and nothing about its contents, so there is no way to tell a fold of two
+   * small categories from money that should not be there at all: somebody who
+   * has just deleted a bill cannot see whether this is what is left of it.
+   * The labels are the answer, and they are already to hand.
+   */
+  members?: string[];
 }
 
 /** §6.7 and the at-a-glance limit agree on roughly this many. */
@@ -93,6 +103,7 @@ export function toSlices(inputs: readonly SliceInput[], options: SliceOptions = 
     {
       ...withShare({ key: '__folded__', label: foldedLabel, valueCents: foldedValue }, folded.length),
       folded: true,
+      members: folded.map((input) => input.label),
     },
     ...neutrals.map((input) => withShare(input)),
   ];

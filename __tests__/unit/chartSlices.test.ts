@@ -144,3 +144,41 @@ describe('sharePercentages', () => {
     expect(sharePercentages([])).toEqual([]);
   });
 });
+
+/**
+ * What the folded tail is made of.
+ *
+ * "Everything else (2)" names a sum and nothing about its contents, which is
+ * indistinguishable from money that should not be there — the question
+ * somebody asks after deleting a bill and still seeing a wedge.
+ */
+describe('naming the folded tail', () => {
+  const many = [
+    { key: 'a', label: 'Groceries', valueCents: 5000 },
+    { key: 'b', label: 'Dairy', valueCents: 4000 },
+    { key: 'c', label: 'Bakery', valueCents: 3000 },
+    { key: 'd', label: 'Snacks', valueCents: 200 },
+    { key: 'e', label: 'Household', valueCents: 100 },
+    { key: 'f', label: 'Meat', valueCents: 50 },
+  ];
+
+  it('lists what it stands for, biggest first', () => {
+    const slices = toSlices(many, { maxSlices: 4 });
+    const folded = slices.find((slice) => slice.folded);
+
+    // Four slots: three keep their names and the last holds the rest.
+    expect(folded?.members).toEqual(['Snacks', 'Household', 'Meat']);
+  });
+
+  it('names as many as it merged', () => {
+    const folded = toSlices(many, { maxSlices: 4 }).find((slice) => slice.folded);
+
+    expect(folded?.members).toHaveLength(folded!.mergedCount);
+  });
+
+  it('leaves an unfolded slice with nothing to list', () => {
+    const slices = toSlices(many.slice(0, 3), { maxSlices: 6 });
+
+    expect(slices.every((slice) => slice.members === undefined)).toBe(true);
+  });
+});
