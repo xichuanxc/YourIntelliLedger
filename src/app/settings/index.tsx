@@ -24,7 +24,7 @@ import {
   clearByokKey,
   getAskKey,
   getByokKey,
-  getByokModel,
+  getByokModelOverride,
   hasOwnAskKey,
   maskKey,
   setAskKey,
@@ -54,13 +54,47 @@ import {
   type ResponseTimes,
   type UsageSummary,
 } from '@/data/telemetryRepo';
+import { modelForAlias } from '@/agent/modelConfig';
 import { formatMonth } from '@/data/dates';
 import { Button } from '@/ui/components/button';
 import { Screen } from '@/ui/components/screen';
+import { SelectMenu, type SelectMenuOption } from '@/ui/components/select-menu';
 import { TextField } from '@/ui/components/text-field';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { Radius, Spacing } from '@/ui/theme';
+
+/**
+ * "No choice of my own" — stored as the absence of an override, so the hub's
+ * alias table decides (§13.5). A sentinel rather than an empty string because
+ * `SelectMenu` identifies the current option by value, and '' reads as "none
+ * of these" instead of as a choice.
+ */
+const HUB_CHOICE = 'hub';
+
+/**
+ * The models offered for reading receipts.
+ *
+ * A list rather than a text box because the names are not guessable and a
+ * typo is indistinguishable from a provider outage: `gemini-3.6-flash-lite`
+ * was published as an alias for months and does not exist, and a request for
+ * it fails with the same 404 as a dead key.
+ *
+ * It is also the daily-quota escape. The free tier counts per model, so when
+ * one name stops answering partway through a batch of receipts, the next one
+ * down has its own allowance and is one tap away.
+ *
+ * Every name here was checked against the live model list. Adding one is a
+ * line in this array; nothing else in the app knows the list exists.
+ */
+const PARSE_MODELS: readonly SelectMenuOption<string>[] = [
+  { value: 'gemini-3.6-flash', label: 'gemini-3.6-flash', caption: 'The default — what the accuracy figures were measured on' },
+  { value: 'gemini-3.7-flash', label: 'gemini-3.7-flash', caption: 'Newer, same family, its own daily allowance' },
+  { value: 'gemini-3.8-flash', label: 'gemini-3.8-flash', caption: 'Newer again' },
+  { value: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite', caption: 'Lighter and cheaper, usually a larger daily allowance' },
+  { value: 'gemini-3.1-flash-lite', label: 'gemini-3.1-flash-lite', caption: 'Older lite model, another allowance again' },
+  { value: HUB_CHOICE, label: 'Automatic', caption: 'Whichever model the hub names' },
+];
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -74,7 +108,7 @@ export default function SettingsScreen() {
   const [askShared, setAskShared] = useState(true);
   const [askDraft, setAskDraft] = useState('');
   const [askStatus, setAskStatus] = useState<string | null>(null);
-  const [model, setModel] = useState('');
+  const [model, setModel] = useState(HUB_CHOICE);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -93,7 +127,7 @@ export default function SettingsScreen() {
       const own = await hasOwnAskKey();
       setAskOwn(own);
       setAskShared(!own);
-      setModel(await getByokModel());
+      setModel((await getByokModelOverride()) ?? HUB_CHOICE);
       setBlockShots(getBlockScreenshots());
       setMapPreviews(getMapPreviews());
       setPriceLookup(getPriceLookup());
@@ -113,18 +147,18 @@ export default function SettingsScreen() {
   );
 
   /**
-   * Saves the receipt key and model — and nothing else.
+   * Saves the receipt key — and nothing else.
    *
    * This used to save the Ask key too, which is why there was no way to tell
    * what the button did: the Ask section had a box and no button, so its value
    * was committed by a button in another section that also rewrote the receipt
-   * key. Each key is now saved only by its own control.
+   * key. Each key is now saved only by its own control, and the model — a
+   * dropdown that writes as it is used — no longer rides along with one.
    */
   const save = async () => {
     setBusy(true);
     try {
       await setByokKey(draft);
-      await setByokModel(model);
       setExisting(await getByokKey());
       // Ask inherits this key while sharing, so its display follows.
       setAskKeyState(await getAskKey());
@@ -237,14 +271,23 @@ export default function SettingsScreen() {
             hint={existing ? 'Leave blank to keep the current key.' : undefined}
           />
 
-          <TextField
+          <SelectMenu
             label="Model"
+            options={PARSE_MODELS}
             value={model}
-            onChangeText={setModel}
-            autoCapitalize="none"
-            autoCorrect={false}
-            hint="Which model reads receipts. Changing this changes accuracy and speed."
+            onChange={(next) => {
+              setModel(next);
+              // Written on choosing, like the switches below, rather than
+              // waiting on Save: a model swapped because a quota ran out is
+              // not an edit anybody wants to half-finish.
+              void setByokModel(next === HUB_CHOICE ? '' : next);
+            }}
           />
+          <ThemedText type="small" themeColor="textSecondary">
+            Which model reads receipts. Changing it changes accuracy, speed, and which daily free
+            allowance is being spent.
+            {model === HUB_CHOICE ? ` Currently ${modelForAlias('parse-strong')}.` : ''}
+          </ThemedText>
 
           {status && (
             <ThemedText type="small" themeColor="success">

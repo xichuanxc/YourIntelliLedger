@@ -43,6 +43,8 @@ jest.mock('@/agent/byokKey', () => ({
     store.ask = null;
   },
   getByokModel: async () => store.model ?? 'gemini-3.6-flash',
+  // null means "no choice of my own", which is what the Automatic option is.
+  getByokModelOverride: async () => store.model,
   setByokModel: async (model: string) => {
     store.model = model.trim() === '' ? null : model.trim();
   },
@@ -89,6 +91,14 @@ jest.mock('@/data/prefs', () => ({
 }));
 
 jest.mock('@/data/conversationRepo', () => ({ clearConversation: jest.fn() }));
+
+/**
+ * The hub's cached alias table, which reaches MMKV at import time. Only the
+ * name the "Automatic" model option shows is wanted here.
+ */
+jest.mock('@/agent/modelConfig', () => ({
+  modelForAlias: () => 'gemini-3.6-flash-lite',
+}));
 
 /**
  * The boundary between the screen and the platform. Mocking here keeps the
@@ -248,14 +258,54 @@ describe('going back to one key', () => {
 });
 
 describe('the receipts key', () => {
-  it('still saves its own key and model', async () => {
+  it('still saves its own key', async () => {
     await draw();
     await type('Replace key', 'AIzaNEWreceipt2222');
-    await type('Model', 'gemini-3.6-pro');
     await press('Save');
 
     await waitFor(() => expect(store.receipt).toBe('AIzaNEWreceipt2222'));
-    expect(store.model).toBe('gemini-3.6-pro');
+  });
+});
+
+/**
+ * Choosing which model reads receipts.
+ *
+ * A dropdown rather than a text box because the names are not guessable, and
+ * it writes as it is used rather than on Save: the reason to change it is
+ * usually that a free-tier daily allowance has just run out partway through a
+ * batch of receipts, and that is not an edit to leave half-finished.
+ */
+describe('the parse model', () => {
+  it('starts on Automatic when no model has been chosen', async () => {
+    await draw();
+
+    expect(screen.getByText('Automatic')).toBeTruthy();
+  });
+
+  it('shows the model the hub names while Automatic is selected', async () => {
+    await draw();
+
+    expect(screen.getByText(/Currently gemini-3.6-flash-lite/)).toBeTruthy();
+  });
+
+  it('writes the choice without waiting for Save', async () => {
+    await draw();
+
+    await press('Model');
+    await press('gemini-3.7-flash');
+
+    await waitFor(() => expect(store.model).toBe('gemini-3.7-flash'));
+  });
+
+  /** Picking Automatic again has to clear the override, not store a name. */
+  it('hands the choice back to the hub', async () => {
+    store.model = 'gemini-3.8-flash';
+    await draw();
+
+    await press('Model');
+    await press('Automatic');
+
+    await waitFor(() => expect(store.model).toBeNull());
   });
 });
 
