@@ -33,6 +33,7 @@ import { ChipSelect } from '@/ui/components/chip-select';
 import { EmptyState } from '@/ui/components/empty-state';
 import { FlagBanner } from '@/ui/components/flag-banner';
 import { Screen } from '@/ui/components/screen';
+import { AmountField } from '@/ui/components/amount-field';
 import { TextField } from '@/ui/components/text-field';
 import { ThemedText } from '@/ui/components/themed-text';
 import { DEV_TOOLS_ENABLED } from '@/ui/devTools';
@@ -384,6 +385,12 @@ export default function ReviewScreen() {
   );
 }
 
+/** A quantity as typed: a positive number, or nothing readable. */
+function parseQuantity(text: string): number | null {
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function ReviewRow({
   item,
   index,
@@ -452,24 +459,24 @@ function ReviewRow({
         <View style={styles.editor}>
           <TextField label="Name" value={item.name} onChangeText={(name) => onEdit({ name })} />
           <View style={styles.editorRow}>
-            <TextField
+            <AmountField
               label="Quantity"
-              value={String(item.qty)}
-              keyboardType="decimal-pad"
-              onChangeText={(text) => {
-                const qty = Number(text);
-                if (Number.isFinite(qty) && qty >= 0) onEdit({ qty });
+              initialText={String(item.qty)}
+              maxDecimals={3}
+              parse={parseQuantity}
+              onCommit={(qty) => {
+                if (qty !== null) onEdit({ qty });
               }}
+              invalidMessage="That isn't a quantity I can read."
               containerStyle={styles.flex}
             />
-            <TextField
+            <AmountField
               label="Price"
-              value={centsToInput(item.price_cents)}
-              keyboardType="decimal-pad"
+              initialText={centsToInput(item.price_cents)}
+              parse={parseCents}
+              onCommit={(price_cents) => onEdit({ price_cents })}
+              allowEmpty
               placeholder="illegible"
-              onChangeText={(text) =>
-                onEdit({ price_cents: text.trim() === '' ? null : parseCents(text) })
-              }
               containerStyle={styles.flex}
             />
           </View>
