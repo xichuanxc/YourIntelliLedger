@@ -80,6 +80,80 @@ describe('refusing to link', () => {
   });
 });
 
+/**
+ * What a shortened name may still link to.
+ *
+ * The case this exists for: asked what the produce cost, the model writes
+ * "Orange Kumara" for a line the till printed as `ORANGE KUMARA (MED)`. These
+ * are the same product by any reading, and requiring the name verbatim left an
+ * answer half-linked for no reason a reader could see.
+ */
+describe('linking a name the answer shortened', () => {
+  it('links the leading words of a longer name', () => {
+    expect(linkify('Orange Kumara cost $5.00.', [ref(5, 'ORANGE KUMARA (MED)')])).toEqual([
+      { text: 'Orange Kumara', billId: 5 },
+      { text: ' cost $5.00.' },
+    ]);
+  });
+
+  it('links two products that share their leading words on one bill', () => {
+    const refs = [
+      ref(9, "Whittaker's Mini Slab Almond Gold Share Pack 12 Pack"),
+      ref(9, "Whittaker's Mini Slab Creamy Milk Share Pack 12 Pack"),
+    ];
+
+    expect(linkify("Two Whittaker's Mini Slab packs.", refs)).toEqual([
+      { text: 'Two ' },
+      { text: "Whittaker's Mini Slab", billId: 9 },
+      { text: ' packs.' },
+    ]);
+  });
+
+  /** A shortening that cannot name one receipt must not name any. */
+  it('refuses a shortened name that fits two bills', () => {
+    const refs = [ref(2, 'Nice Milk Bottles 250g'), ref(9, 'Nice Milk Bottles 500g')];
+
+    expect(linkify('You bought Nice Milk Bottles twice.', refs)).toEqual([
+      { text: 'You bought Nice Milk Bottles twice.' },
+    ]);
+  });
+
+  /**
+   * The rule that keeps this from overfitting. "Table" is a word a sentence
+   * uses for itself, and one bill selling `Table Carrots` must not claim it.
+   */
+  it('never links a single word out of a longer name', () => {
+    expect(linkify('It was on the table.', [ref(1, 'Table Carrots')])).toEqual([
+      { text: 'It was on the table.' },
+    ]);
+  });
+
+  it('ignores a leading pair too short to be distinctive', () => {
+    expect(linkify('Hot Dog rolls, $4.', [ref(3, 'Hot Dog Buns Six Pack')])).toEqual([
+      { text: 'Hot Dog rolls, $4.' },
+    ]);
+  });
+
+  /** An abbreviation of one product must never shadow another's real name. */
+  it('gives a name spelled out in full to the bill that spells it', () => {
+    const refs = [ref(2, 'Nice Milk Bottles'), ref(9, 'Nice Milk Bottles 250g')];
+
+    expect(linkify('Nice Milk Bottles, $3.', refs)).toEqual([
+      { text: 'Nice Milk Bottles', billId: 2 },
+      { text: ', $3.' },
+    ]);
+  });
+
+  it('still prefers the full name where the answer gives it', () => {
+    const refs = [ref(9, 'Nice Marshmallows 250g')];
+
+    expect(linkify('Nice Marshmallows 250g, $4.', refs)).toEqual([
+      { text: 'Nice Marshmallows 250g', billId: 9 },
+      { text: ', $4.' },
+    ]);
+  });
+});
+
 describe('names that would break a naive matcher', () => {
   /**
    * `\b` is defined against ASCII word characters, so it matches at every
