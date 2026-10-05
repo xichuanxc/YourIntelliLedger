@@ -128,6 +128,19 @@ export function setInsightsCustom(period: { from: string; to: string }): void {
 }
 
 /**
+ * Forgets the hand-picked range.
+ *
+ * Called when a preset is chosen, because the two controls describe one
+ * period between them: a preset that left dates behind would have the screen
+ * saying "Last 3 months" and "1 – 30 June" at once, and only one of them
+ * would be true of the charts.
+ */
+export function clearInsightsCustom(): void {
+  mmkv().remove(KEYS.insightsCustomFrom);
+  mmkv().remove(KEYS.insightsCustomTo);
+}
+
+/**
  * Forgets every preference, returning the app to its defaults (§15.2).
  *
  * Preferences are not spending, but several of them describe it — the

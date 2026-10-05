@@ -27,6 +27,7 @@ import {
 } from '@/data/insightsRepo';
 import { formatMoney, formatMoneyCompact } from '@/data/money';
 import {
+  clearInsightsCustom,
   getInsightsCustom,
   getInsightsRange,
   getMapPreviews,
@@ -240,13 +241,24 @@ export default function InsightsScreen() {
   const { unit, count, shift } = rangeOf(range);
 
   /**
+   * The two controls are one period between them, so each clears after the
+   * other.
+   *
    * Choosing "Custom" with nothing picked yet starts from what is on screen,
    * so the charts do not empty while waiting for two taps in a calendar.
+   * Choosing a preset drops the hand-picked dates, because a screen reading
+   * "Last 3 months" beside "1 – 30 June" is telling the reader two different
+   * things about one set of charts, and only one of them is true.
    */
   const chooseRange = (next: PeriodChoice) => {
-    if (next === 'custom' && custom === null && data) {
-      setCustom(data.period);
-      setInsightsCustom(data.period);
+    if (next === 'custom') {
+      if (custom === null && data) {
+        setCustom(data.period);
+        setInsightsCustom(data.period);
+      }
+    } else {
+      setCustom(null);
+      clearInsightsCustom();
     }
     setRange(next);
     setInsightsRange(next);
