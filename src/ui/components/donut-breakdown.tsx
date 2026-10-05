@@ -99,21 +99,36 @@ export function DonutBreakdown({
     });
 
     /**
-     * The palette, skipping any hue that is a brand colour wearing a
-     * different name. Measured rather than judged: in light mode the
-     * palette's amber sits ΔE 8.2 from PAK'nSAVE's yellow and `#008300` sits
-     * 5.0 from Woolworths' green, which is one colour as far as a reader is
-     * concerned — and the swatch is the only thing tying a wedge to its row.
+     * The palette, avoiding two kinds of collision in that order of priority.
      *
-     * Skipped in palette order, so the hues that remain keep their fixed
-     * sequence. If every hue is too close, the next is taken anyway: a
-     * near-duplicate is poor, and a slice with no colour at all is worse.
+     * A hue must not be a brand colour wearing a different name. Measured
+     * rather than judged: in light mode the palette's amber sits ΔE 8.2 from
+     * PAK'nSAVE's yellow and `#008300` sits 5.0 from Woolworths' green, which
+     * is one colour as far as a reader is concerned.
+     *
+     * But a hue must *first* not already belong to another shop in the same
+     * chart. The first build of this cleared the brand colours and then
+     * cycled, which with two chains present left three usable hues for four
+     * other shops — and drew Borman Fresh and Wellmart in exactly the same
+     * blue. An exact duplicate is worse than a near miss: a near miss is a
+     * colour you look twice at, a duplicate is one you cannot use at all.
+     *
+     * So an unused hue is always taken over a used one, and among the unused
+     * the first in palette order that clears the brands; if none clears, the
+     * one that sits furthest from them. Fixed palette order survives, because
+     * `find` walks it in order.
      *
      * Written as a loop rather than a closure over a counter because the
      * React Compiler will not have a variable reassigned after render.
      */
     const assigned: string[] = [];
-    let hue = 0;
+    const spent = new Set<string>();
+
+    /** How close this hue comes to the nearest brand colour in the chart. */
+    const clearance = (hue: string) =>
+      claimed.length === 0
+        ? Number.POSITIVE_INFINITY
+        : Math.min(...claimed.map((taken) => colourDistance(hue, taken)));
 
     for (const [index, slice] of computed.entries()) {
       // Only a neutral slice — an absence of category, i.e. "not itemised" —
@@ -130,20 +145,13 @@ export function DonutBreakdown({
         continue;
       }
 
-      let chosen: string | null = null;
-      for (let step = 0; step < palette.length && chosen === null; step += 1) {
-        const candidate = palette[(hue + step) % palette.length];
-        if (claimed.every((taken) => colourDistance(candidate, taken) >= BRAND_CLEARANCE)) {
-          chosen = candidate;
-          hue += step + 1;
-        }
-      }
+      const unused = palette.filter((hue) => !spent.has(hue));
+      const pool = unused.length > 0 ? unused : palette;
+      const chosen =
+        pool.find((hue) => clearance(hue) >= BRAND_CLEARANCE) ??
+        pool.reduce((best, hue) => (clearance(hue) > clearance(best) ? hue : best), pool[0]);
 
-      if (chosen === null) {
-        chosen = palette[hue % palette.length];
-        hue += 1;
-      }
-
+      spent.add(chosen);
       assigned.push(chosen);
     }
 
