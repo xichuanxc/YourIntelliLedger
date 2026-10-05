@@ -24,6 +24,39 @@ import {
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
+/**
+ * How hard the model may think before answering (§5.7's latency budget).
+ *
+ * `minimal` is the floor of the documented ladder (minimal < low < medium <
+ * high) and what the measurement below argues for, but it is **not offered by
+ * every model**: `gemini-3.7-flash` and `gemini-3.8-flash` answer a request
+ * for it with *"Thinking level MINIMAL is not supported for this model"* and a
+ * 400, while 3.6-flash and both flash-lites accept it. Measured against the
+ * live API, model by model, rather than inferred from version numbers — which
+ * would have got it backwards, since the newer models are the stricter ones.
+ *
+ * So the level is per model, and the knowledge is seeded rather than relied
+ * on: a model that rejects the floor is remembered and the request is retried
+ * one rung up. A name nobody has measured therefore costs one extra round
+ * trip once per launch instead of failing a parse, which matters because the
+ * reason to change model is usually that a free-tier allowance ran out and
+ * every request is being counted.
+ */
+const THINKING_FLOOR = 'minimal';
+const THINKING_NEXT_RUNG = 'low';
+
+/** Models known to reject the floor. Seeded with what was measured. */
+const REJECTS_FLOOR = new Set(['gemini-3.7-flash', 'gemini-3.8-flash']);
+
+function thinkingLevelFor(model: string): string {
+  return REJECTS_FLOOR.has(model) ? THINKING_NEXT_RUNG : THINKING_FLOOR;
+}
+
+/** Google's wording for it; matched loosely because only the subject matters. */
+function isThinkingLevelRefusal(detail: string): boolean {
+  return /thinking level/i.test(detail);
+}
+
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
   usageMetadata?: {
@@ -120,7 +153,9 @@ export function createByokTransport(): ParseTransport {
       // deliberate Settings entry still wins, so a model can be evaluated
       // before the hub is repointed at it.
       const model = (await getByokModelOverride()) ?? modelForAlias('parse-strong');
-      const response = await fetch(`${ENDPOINT}/${model}:generateContent`, {
+
+      const send = (thinkingLevel: string) =>
+        fetch(`${ENDPOINT}/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
@@ -143,24 +178,56 @@ export function createByokTransport(): ParseTransport {
             // §5.5 allows.
             responseMimeType: 'application/json',
             temperature: 0,
-            // NOTE — measured, and the obvious fix does not work here.
-            //
-            // On the TAIER receipt this model spent 726 thinking tokens against
-            // 92 of output: eight times the answer, for a receipt with no line
-            // items at all. Thinking tokens are timed as well as billed, so they
-            // dominate the wait, and a receipt parse is extraction against an
-            // explicit schema rather than reasoning.
-            //
-            // `thinkingConfig: { thinkingBudget: 0 }` is therefore what you want,
-            // but gemini-3.6-flash rejects it outright with "Request contains an
-            // invalid argument" — this model appears not to allow thinking to be
-            // switched off. Left unset deliberately. The levers that remain are a
-            // model that permits a thinking budget, or a shorter prompt.
+            /**
+             * Thinking is the parse latency — §5.7 wants ≤ 6 s and we measured
+             * 9.6–15.0 s, with `think=1456–2584` against `out=456`. At roughly
+             * 5 ms per generated token, ~80% of the wait is reasoning the user
+             * never sees, for what is extraction against a fixed schema.
+             *
+             * An earlier note here concluded thinking could not be switched off,
+             * because `thinkingBudget: 0` came back "Request contains an invalid
+             * argument". That read the error as being about thinking; it was
+             * about the *parameter*. `thinkingBudget` is the Gemini 2.5 control
+             * and Gemini 3 replaced it with `thinkingLevel` — the two are
+             * mutually exclusive, and sending the retired one is a 400 whatever
+             * its value. Google's migration note names `minimal` as the
+             * equivalent of the old zero budget: "as close as possible to a zero
+             * budget for thinking".
+             *
+             * `minimal` rather than `low` because the ladder is documented as
+             * minimal < low < medium < high and this is the floor. If this model
+             * turns out not to offer it — the published tables cover 3.1 and 3.5
+             * flash-lite, not 3.6 — `low` is the next rung, not a return to the
+             * default.
+             *
+             * Watch accuracy, not just the clock. This trades reasoning for
+             * speed on exactly the receipts that most need it (faint thermal
+             * print, wrapped item lines), so §5.7's accuracy figures want
+             * re-measuring before this is called a win.
+             */
+            thinkingConfig: { thinkingLevel },
           },
         }),
       });
 
-      const body = (await response.json().catch(() => ({}))) as GeminiResponse;
+      let level = thinkingLevelFor(model);
+      let response = await send(level);
+      let body = (await response.json().catch(() => ({}))) as GeminiResponse;
+
+      // The one error worth spending a second request on: the model refused
+      // the level rather than the receipt, so the same prompt one rung up is
+      // the whole fix. Remembered, so a batch of receipts pays for this once.
+      if (
+        !response.ok &&
+        response.status === 400 &&
+        level === THINKING_FLOOR &&
+        isThinkingLevelRefusal(body.error?.message ?? '')
+      ) {
+        REJECTS_FLOOR.add(model);
+        level = THINKING_NEXT_RUNG;
+        response = await send(level);
+        body = (await response.json().catch(() => ({}))) as GeminiResponse;
+      }
 
       if (!response.ok) {
         const detail = body.error?.message ?? `HTTP ${response.status}`;
