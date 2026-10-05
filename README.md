@@ -439,9 +439,25 @@ amounts), not a benchmark run.
 
 **Typical time is the median round trip over all 51 requests**, most of which
 are receipt parses — so it is the figure to read against §5.7's ≤ 6 s for a
-parse, and it sits comfortably inside it. It is *not* §6.8's split of fast-path
-p95 and agent first-token p50/p95; those have their own panel in Settings and
-no figures yet, because they need questions asked rather than receipts read.
+parse, and it sits comfortably inside it.
+
+§6.8's two acceptance figures are counted separately, in Settings → Speed:
+
+| §6.8 | measured | target | |
+|---|---|---|---|
+| Fast-path p95 | **38 ms** (3 samples) | < 100 ms | met |
+| Agent p50 to first token | **3.8 s** (16 samples) | < 4 s | met |
+| Agent p95 to first token | 7.5 s | — none stated | |
+
+**Both acceptance criteria are met, and the samples are small enough to say
+so carefully.** A p95 over three fast-path answers is the slowest of three
+rather than a tail, and 3.8 s against a 4 s bar is inside it by less than the
+spread of sixteen samples — a different afternoon on a different network could
+land either side. The p95 of 7.5 s has no bar in the spec and is the honest
+shape of the tail: a slow first token is twice the median, which is what asking
+a model over mobile data costs when it costs anything.
+
+§6.8 also asks for this **on both platforms**; these figures are the iPhone's.
 
 **The 15 failures are explained, and both causes are now fixed.** They
 accumulated across the month, before either repair. The hub published
