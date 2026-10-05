@@ -35,9 +35,28 @@
  * 1. the name as the receipt printed it;
  * 2. for a chain, the name without its branch — the pin is already sitting on
  *    the branch, and one PAK'nSAVE is much like another;
- * 3. the amount alone.
+ * 3. the name without a trailing word that says only what kind of shop it is;
+ * 4. the amount alone.
  *
  * Only the last has no name in it, and it is genuinely last.
+ *
+ * The third form exists because of one shop. "Fruit City Supermarket" wants
+ * about 207pt with its amount, against a 190pt ceiling on a map around 350pt
+ * wide, so its full name never fitted anywhere and it showed as an amount
+ * with no shop against it — on a map whose whole point is which shop. It has
+ * no branch to drop, because it is not a chain.
+ *
+ * "Supermarket" is the part a reader can spare: the pin is on a map of
+ * supermarkets, and "Fruit City" is what anybody calls the place. This is the
+ * same trade as dropping a chain's branch, and emphatically not the ellipsis
+ * that was removed — nothing is cut mid-word, and what is left is a name
+ * somebody could repeat out loud.
+ *
+ * Two rules keep it from repeating the "Garden" mistake, where shortening a
+ * name produced a different, wrong shop. The dropped word must be one of a
+ * closed list that describes a kind of shop rather than names one, and what
+ * remains must still be at least two words. "Island Supermarket" therefore
+ * keeps its full name or shows nothing, because "Island" is not that shop.
  *
  * There was briefly a fourth form between the second and the third: the name
  * cut short with an ellipsis, so that a shop with no branch to drop still had
@@ -92,11 +111,53 @@ export const labelWidthFor = (text: string): number =>
 export const formWidth = (form: LabelForm): number => labelWidthFor(formText(form));
 
 /**
+ * Trailing words that say what kind of shop it is rather than which one.
+ *
+ * Closed on purpose, and short. Every addition is a chance to turn a shop
+ * into a different one, so a word earns its place here only by being useless
+ * on a map that is already a map of places to buy food.
+ */
+const GENERIC_TAIL = new Set([
+  'supermarket',
+  'superette',
+  'market',
+  'mart',
+  'store',
+  'shop',
+  'grocer',
+  'grocers',
+  'groceries',
+  'foods',
+  'food',
+  'dairy',
+]);
+
+/** At least this many words must survive, or the name becomes another shop. */
+const MIN_WORDS_KEPT = 2;
+
+/**
+ * The name without a trailing "Supermarket", or the name unchanged.
+ *
+ * Only the last word is considered: a generic word in the middle is part of
+ * how the shop is known ("Fresh Food Mart" without "Food" is not a nicer
+ * name, it is a worse one).
+ */
+export function withoutGenericTail(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= MIN_WORDS_KEPT) return name;
+
+  const last = words[words.length - 1].toLowerCase().replace(/[^\p{L}]/gu, '');
+  if (!GENERIC_TAIL.has(last)) return name;
+
+  return words.slice(0, -1).join(' ');
+}
+
+/**
  * The ways this shop's label could be written, most complete first.
  *
- * Duplicates are left out rather than offered twice, so an independent shop
- * — which has no branch to drop — simply has two forms where a chain has
- * three.
+ * Duplicates are left out rather than offered twice, so a shop offers only
+ * the forms that actually differ: most have two, a chain with a branch or an
+ * independent with a generic tail has three.
  */
 export function labelFormsFor(
   label: string,
@@ -109,6 +170,7 @@ export function labelFormsFor(
   };
 
   add(shortMerchantName(merchantNorm, label));
+  add(withoutGenericTail(label));
 
   forms.push({ name: null, amount });
 

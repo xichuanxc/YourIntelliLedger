@@ -111,3 +111,51 @@ describe('the forms a shop offers', () => {
     }
   });
 });
+
+/**
+ * Dropping a word that names a kind of shop rather than a shop.
+ *
+ * The case this exists for: "Fruit City Supermarket" with its amount wants
+ * about 207pt against a 190pt ceiling, on a map around 350pt wide. It never
+ * fitted anywhere, and because it is not a chain it had no branch to drop —
+ * so the map showed an amount with no shop against it.
+ */
+describe('dropping a word that only says what kind of shop it is', () => {
+  const names = (label: string, norm: string | null = null) =>
+    labelFormsFor(label, norm, '$18').map((form) => form.name);
+
+  it('offers the shop without its "Supermarket"', () => {
+    expect(names('Fruit City Supermarket')).toEqual([
+      'Fruit City Supermarket',
+      'Fruit City',
+      null,
+    ]);
+  });
+
+  /**
+   * The "Garden" rule. Shortening must not produce a different shop, so what
+   * is left has to be a name in its own right — two words at least.
+   */
+  it('refuses when only one word would be left', () => {
+    expect(names('Island Supermarket')).toEqual(['Island Supermarket', null]);
+  });
+
+  it('leaves a name whose last word is part of it', () => {
+    expect(names('Garden Fresh Produce')).toEqual(['Garden Fresh Produce', null]);
+  });
+
+  it('does not find a generic word inside a single word', () => {
+    expect(names('Wellmart')).toEqual(['Wellmart', null]);
+  });
+
+  /** A middle word is how the shop is known; only the tail is spare. */
+  it('leaves a generic word that is not at the end', () => {
+    expect(names('Fresh Food Mart Hamilton')).toEqual(['Fresh Food Mart Hamilton', null]);
+  });
+
+  it('still drops a chain branch before anything else', () => {
+    const all = names("PAK'nSAVE Mill Street", 'paknsave mill street');
+
+    expect(all[1]).toBe("PAK'nSAVE");
+  });
+});
