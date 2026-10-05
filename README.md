@@ -423,6 +423,36 @@ Native libraries are stored *uncompressed* in the APK
 overstates what Play transfers. An authoritative figure needs `bundletool`
 against an AAB, which is worth doing before Week 10.
 
+### Measured on device — iPhone SE (3rd generation), Release
+
+One month's real use, read from Settings → Usage on 5 October 2026. These are
+the app's own counters (§15.3: counts and timings only, never question text or
+amounts), not a benchmark run.
+
+| | |
+|---|---|
+| Requests | 51 |
+| of those, receipt reads | 43 |
+| Tokens | 152,473 in / 17,942 out |
+| Typical time | **3.6 s** |
+| Failed | 15 |
+
+**Typical time is the median round trip over all 51 requests**, most of which
+are receipt parses — so it is the figure to read against §5.7's ≤ 6 s for a
+parse, and it sits comfortably inside it. It is *not* §6.8's split of fast-path
+p95 and agent first-token p50/p95; those have their own panel in Settings and
+no figures yet, because they need questions asked rather than receipts read.
+
+**The 15 failures are explained, and both causes are now fixed.** They
+accumulated across the month, before either repair. The hub published
+`gemini-3.6-flash-lite` as the parse model and that model does not exist, so
+every request naming it came back 404; and `thinkingLevel: minimal` is rejected
+outright by `gemini-3.7-flash` and `gemini-3.8-flash`, which answer 400 with
+"Thinking level MINIMAL is not supported for this model". The model is now
+chosen from a list of names checked against the live API, and the thinking
+level is per model with a retry one rung up. A failure costs no tokens, which
+is why 51 requests and 43 receipts read are consistent with 15 of them failing.
+
 ### Known gaps
 
 - **The scanner and camera capture paths are untested on device.** Both need a
