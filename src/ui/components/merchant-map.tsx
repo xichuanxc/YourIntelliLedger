@@ -338,7 +338,27 @@ export function MerchantMap({
   const placed = useMemo(
     () =>
       locations
-        .map((location) => ({ location, point: points[location.address] }))
+        .map((location) => {
+          const known = points[location.address];
+          if (known !== undefined) return { location, point: known };
+
+          /**
+           * A shop that joined the map after it mounted — which is what
+           * changing the period does — and whose address the cache already
+           * holds. It would otherwise never be placed: `points` is seeded
+           * once, at mount, and the lookup loop skips anything already
+           * cached, so nothing ever wrote it. The shop's own bill drew it
+           * perfectly from this same cache, which is what made the map look
+           * wrong rather than merely empty.
+           *
+           * Read here rather than pushed from the effect because the cache is
+           * synchronous and this is a pure read: setting state inside an
+           * effect to mirror it would be a second copy of the truth, and a
+           * cascading render for no reason.
+           */
+          const cached = readCache(location.address);
+          return { location, point: cached.kind === 'hit' ? cached.point : null };
+        })
         .filter((entry): entry is { location: MerchantLocation; point: GeoPoint } =>
           Boolean(entry.point)
         ),
