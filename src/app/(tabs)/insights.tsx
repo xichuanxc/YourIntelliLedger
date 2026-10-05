@@ -62,6 +62,7 @@ import { StatTile } from '@/ui/components/stat-tile';
 import { ThemedText } from '@/ui/components/themed-text';
 import { useTabBarInset } from '@/ui/hooks/use-tab-bar-inset';
 import { headlineCase } from '@/ui/headlineCase';
+import { BRAND_COLOURS, brandOf } from '@/ui/merchantBrand';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { MaxContentWidth, Radius, Spacing } from '@/ui/theme';
 
@@ -412,7 +413,14 @@ export default function InsightsScreen() {
       : []),
   ];
 
-  const merchantEntries: SliceInput[] = merchants.map((merchant) => ({
+  const merchantEntries: SliceInput[] = merchants.map((merchant) => {
+    // The chains draw in their own colours, the same ones their pins wear on
+    // the map above — a reader should not have to learn the identity twice on
+    // one screen. Everything else takes the categorical palette, because a
+    // shop with no colour of its own gains nothing from being given one.
+    const brand = brandOf(merchant.merchantNorm, merchant.merchant);
+
+    return {
     key: merchant.merchantNorm ?? 'unnamed',
     // Cased here rather than at each of the three places it is drawn — the
     // legend, the map chip and the drill-down's heading all take this label,
@@ -420,7 +428,9 @@ export default function InsightsScreen() {
     // unaffected by arriving in headline case.
     label: merchant.merchant ? headlineCase(merchant.merchant) : 'Unnamed merchant',
     valueCents: merchant.totalCents,
-  }));
+    ...(brand === 'other' ? {} : { colour: BRAND_COLOURS[brand] }),
+    };
+  });
 
   // The merchant query returns the top few, so its donut is a whole of what is
   // shown, not of all spending. Labelling it with the period total would claim

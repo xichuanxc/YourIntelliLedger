@@ -4,6 +4,7 @@ import { PieChart } from 'react-native-gifted-charts';
 
 import { formatMoney } from '@/data/money';
 import { neutralFor, paletteFor } from '@/ui/chartPalette';
+import { colourDistance } from '@/ui/colourDistance';
 import { sharePercentages, toSlices, type Slice, type SliceInput } from '@/ui/chartSlices';
 import { ChevronRightIcon } from '@/ui/components/chevron-icon';
 import { ThemedText } from '@/ui/components/themed-text';
@@ -53,6 +54,16 @@ export interface DonutBreakdownProps {
  * Slices are capped and the tail folded in `chartSlices.ts`; hues are assigned
  * in fixed order and never cycled.
  */
+/**
+ * How far a palette hue must sit from a brand colour already in the chart.
+ *
+ * Below about 8 two colours are the same to anyone; 15 is where separation
+ * becomes reliable. Twelve is the compromise this chart can afford: it drops
+ * the hues that are genuinely confusable with a chain's colour while leaving
+ * enough of the palette for the shops that have no colour of their own.
+ */
+const BRAND_CLEARANCE = 12;
+
 export function DonutBreakdown({
   entries,
   currency,
@@ -71,13 +82,70 @@ export function DonutBreakdown({
     const palette = paletteFor(scheme);
     const neutral = neutralFor(scheme);
 
+    /**
+     * The colours entries brought with them — a chain's own, so the wedge and
+     * its pin on the map agree. Collected first, because the palette has to
+     * know what it is sharing the chart with.
+     *
+     * A colour claimed twice is dropped the second time: two branches of one
+     * chain are two rows in the legend, and two identical swatches would make
+     * the swatch useless for telling them apart.
+     */
+    const claimed: string[] = [];
+    const own = computed.map((slice) => {
+      if (slice.neutral || !slice.colour || claimed.includes(slice.colour)) return undefined;
+      claimed.push(slice.colour);
+      return slice.colour;
+    });
+
+    /**
+     * The palette, skipping any hue that is a brand colour wearing a
+     * different name. Measured rather than judged: in light mode the
+     * palette's amber sits ΔE 8.2 from PAK'nSAVE's yellow and `#008300` sits
+     * 5.0 from Woolworths' green, which is one colour as far as a reader is
+     * concerned — and the swatch is the only thing tying a wedge to its row.
+     *
+     * Skipped in palette order, so the hues that remain keep their fixed
+     * sequence. If every hue is too close, the next is taken anyway: a
+     * near-duplicate is poor, and a slice with no colour at all is worse.
+     *
+     * Written as a loop rather than a closure over a counter because the
+     * React Compiler will not have a variable reassigned after render.
+     */
+    const assigned: string[] = [];
     let hue = 0;
-    const assigned = computed.map((slice) =>
+
+    for (const [index, slice] of computed.entries()) {
       // Only a neutral slice — an absence of category, i.e. "not itemised" —
       // gives up its hue. The folded tail keeps one: it is real categorised
       // spending, and sharing the grey made the two indistinguishable.
-      slice.neutral ? neutral : palette[hue++ % palette.length]
-    );
+      if (slice.neutral) {
+        assigned.push(neutral);
+        continue;
+      }
+
+      const brought = own[index];
+      if (brought) {
+        assigned.push(brought);
+        continue;
+      }
+
+      let chosen: string | null = null;
+      for (let step = 0; step < palette.length && chosen === null; step += 1) {
+        const candidate = palette[(hue + step) % palette.length];
+        if (claimed.every((taken) => colourDistance(candidate, taken) >= BRAND_CLEARANCE)) {
+          chosen = candidate;
+          hue += step + 1;
+        }
+      }
+
+      if (chosen === null) {
+        chosen = palette[hue % palette.length];
+        hue += 1;
+      }
+
+      assigned.push(chosen);
+    }
 
     return { slices: computed, percentages: sharePercentages(computed), colours: assigned };
   }, [entries, foldedLabel, scheme]);

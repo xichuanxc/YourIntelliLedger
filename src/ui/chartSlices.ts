@@ -30,6 +30,12 @@ export interface SliceInput {
    * indistinguishable from the remainder in the ring.
    */
   neutral?: boolean;
+  /**
+   * This entity's own colour, where it has one that means something — a
+   * supermarket chain's, so the wedge matches its pin on the map. Entries
+   * without one take the next hue from the categorical palette.
+   */
+  colour?: string;
 }
 
 export interface Slice extends SliceInput {
