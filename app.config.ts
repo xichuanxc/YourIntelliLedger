@@ -113,26 +113,6 @@ const config: ExpoConfig = {
      */
     devTools: process.env.DEV_TOOLS === '1',
 
-    /**
-     * Keys a demo build may offer to fill the Settings field with, so a key
-     * does not have to be typed into a phone by hand.
-     *
-     * §8.2 says no API key is in the app binary, and this does not change
-     * that for anything anyone will install: the value comes from the
-     * environment of the build, so a build made without it has an empty list
-     * and no picker. `.env.local` is gitignored, so no key reaches the
-     * repository either.
-     *
-     *     DEMO_KEYS=key-one,key-two DEV_TOOLS=1 xcodebuild … -configuration Release …
-     *
-     * A build made *with* it does carry those keys, which is the honest cost:
-     * such a build is for the handset on the desk, is not for distribution,
-     * and the keys it holds should be revoked once it has served its purpose.
-     */
-    demoKeys: (process.env.DEMO_KEYS ?? '')
-      .split(',')
-      .map((key) => key.trim())
-      .filter(Boolean),
   },
 };
 
