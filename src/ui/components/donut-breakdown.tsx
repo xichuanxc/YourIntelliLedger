@@ -23,6 +23,15 @@ export interface DonutBreakdownProps {
    */
   totalLabel?: string;
   foldedLabel?: string;
+  /**
+   * Whether the folded tail leads somewhere of its own.
+   *
+   * Off by default, and that default is the honest one: the tail stands for
+   * several entries at once, so for most donuts there is no single list
+   * behind it to open. A caller that has somewhere to send it — a screen
+   * listing what it merged — says so here.
+   */
+  foldedSelectable?: boolean;
   emptyMessage: string;
   /**
    * Drill into a slice. Supplying this makes the legend rows tappable —
@@ -50,6 +59,7 @@ export function DonutBreakdown({
   totalCents,
   totalLabel = 'total',
   foldedLabel,
+  foldedSelectable = false,
   emptyMessage,
   onSelect,
 }: DonutBreakdownProps) {
@@ -119,9 +129,9 @@ export function DonutBreakdown({
           const description =
             `${slice.label}, ${formatMoney(slice.valueCents, currency)}, ` +
             `${percentages[index]} percent${members ? `, made up of ${members}` : ''}`;
-          // The folded tail is several categories wearing one label; there is
-          // no single list of anything behind it.
-          const selectable = onSelect !== undefined && !slice.folded;
+          // The folded tail is several categories wearing one label, so it
+          // leads somewhere only when the caller has a screen for it.
+          const selectable = onSelect !== undefined && (!slice.folded || foldedSelectable);
 
           const content = (
             <>

@@ -549,15 +549,25 @@ export default function InsightsScreen() {
                   currency={summary.currency}
                   totalCents={breakdown.totalCents}
                   emptyMessage="No itemised spending in this period."
-                  onSelect={(slice) =>
+                  // The tail has somewhere to go here: a list of the
+                  // categories it merged, which the merchant donut below has
+                  // no equivalent of.
+                  foldedSelectable
+                  onSelect={(slice) => {
+                    if (slice.folded) {
+                      // Several categories at once, so the keys travel as a
+                      // list and the screen looks their money up again.
+                      openBreakdown('categories', (slice.memberKeys ?? []).join(','), slice.label);
+                      return;
+                    }
                     openBreakdown(
                       // The remainder is not a category, so it drills into
                       // bills-and-shortfalls rather than into items.
                       slice.key === 'unitemised' ? 'unitemised' : 'category',
                       slice.key,
                       slice.label
-                    )
-                  }
+                    );
+                  }}
                 />
               </View>
 

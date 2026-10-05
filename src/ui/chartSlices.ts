@@ -49,6 +49,11 @@ export interface Slice extends SliceInput {
    * The labels are the answer, and they are already to hand.
    */
   members?: string[];
+  /**
+   * The same entries by key, so the tail can be drilled into rather than only
+   * named. Labels are for reading; keys are what a query needs.
+   */
+  memberKeys?: string[];
 }
 
 /** §6.7 and the at-a-glance limit agree on roughly this many. */
@@ -104,6 +109,7 @@ export function toSlices(inputs: readonly SliceInput[], options: SliceOptions = 
       ...withShare({ key: '__folded__', label: foldedLabel, valueCents: foldedValue }, folded.length),
       folded: true,
       members: folded.map((input) => input.label),
+      memberKeys: folded.map((input) => input.key),
     },
     ...neutrals.map((input) => withShare(input)),
   ];

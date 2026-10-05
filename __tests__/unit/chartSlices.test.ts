@@ -170,6 +170,14 @@ describe('naming the folded tail', () => {
     expect(folded?.members).toEqual(['Snacks', 'Household', 'Meat']);
   });
 
+  /** Labels are for reading; the keys are what the drill-down queries with. */
+  it('carries the keys as well as the labels, in the same order', () => {
+    const folded = toSlices(many, { maxSlices: 4 }).find((slice) => slice.folded);
+
+    expect(folded?.memberKeys).toEqual(['d', 'e', 'f']);
+    expect(folded?.memberKeys).toHaveLength(folded!.members!.length);
+  });
+
   it('names as many as it merged', () => {
     const folded = toSlices(many, { maxSlices: 4 }).find((slice) => slice.folded);
 

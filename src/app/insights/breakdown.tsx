@@ -10,6 +10,11 @@
  *    than its total. The remainder is `total − itemised` across the period
  *    (§14.6); per bill it is the same subtraction, which is why this is not
  *    simply "bills with no items".
+ *  - **categories** → the categories a donut folded into one wedge, since
+ *    "Everything else" is a sum over several and has no items of its own.
+ *    Its rows lead here again, one category at a time, which is the only
+ *    drill-down in the app that is two deep — and has to be, because the
+ *    wedge is one level of aggregation above everything else on the screen.
  *
  * Every row leads to the bill it came from, so the drill-down bottoms out
  * somewhere useful rather than in a dead-end list.
@@ -26,11 +31,16 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 
 import { formatDate } from '@/data/dates';
 import { getDb } from '@/data/db';
-import { getCategoryItems, getMerchantBills, getUnitemisedBills } from '@/data/insightsRepo';
+import {
+  getCategoryBreakdown,
+  getCategoryItems,
+  getMerchantBills,
+  getUnitemisedBills,
+} from '@/data/insightsRepo';
 import { formatMoney, formatQuantity } from '@/data/money';
 import type { CategoryItem, MerchantBill, UnitemisedBill } from '@/types/insights';
 import type { Category } from '@/types/vocabulary';
-import { UNIT_LABELS } from '@/types/vocabulary';
+import { CATEGORY_LABELS, UNIT_LABELS, isCategory } from '@/types/vocabulary';
 import { ChevronRightIcon } from '@/ui/components/chevron-icon';
 import { EmptyState } from '@/ui/components/empty-state';
 import { Screen } from '@/ui/components/screen';
@@ -39,11 +49,14 @@ import { headlineCase } from '@/ui/headlineCase';
 import { useTheme } from '@/ui/hooks/use-theme';
 import { Radius, Spacing } from '@/ui/theme';
 
-export type BreakdownDimension = 'category' | 'merchant' | 'unitemised';
+export type BreakdownDimension = 'category' | 'merchant' | 'unitemised' | 'categories';
 
 interface Params {
   dimension: BreakdownDimension;
-  /** Category value, or merchant_norm. Empty string means SQL NULL. */
+  /**
+   * Category value, or merchant_norm — or, for `categories`, the folded
+   * categories as a comma-separated list. Empty string means SQL NULL.
+   */
   key: string;
   /** What the legend row said, so the header matches what was tapped. */
   label: string;
@@ -52,10 +65,46 @@ interface Params {
   currency: string;
 }
 
+interface CategoryTotal {
+  category: Category;
+  totalCents: number;
+  itemCount: number;
+}
+
 type Rows =
   | { kind: 'category'; rows: CategoryItem[] }
   | { kind: 'bills'; rows: MerchantBill[] }
-  | { kind: 'unitemised'; rows: UnitemisedBill[] };
+  | { kind: 'unitemised'; rows: UnitemisedBill[] }
+  | { kind: 'categories'; rows: CategoryTotal[] };
+
+/**
+ * The categories a wedge folded, with their totals, biggest first.
+ *
+ * Recomputed from the database rather than carried through the parameters:
+ * the amounts are already on screen when the wedge is tapped, but a figure
+ * that travelled through a URL is a figure that can disagree with the ledger
+ * the moment a bill changes. The keys travel; the money is looked up.
+ *
+ * Anything in the parameter that is not a category this build knows is
+ * dropped: the list comes from a chart drawn by some version of the app, and
+ * an unknown value is not worth a crash.
+ */
+async function foldedCategories(
+  db: Awaited<ReturnType<typeof getDb>>,
+  period: { from: string; to: string },
+  keys: string
+): Promise<CategoryTotal[]> {
+  const wanted = new Set(keys.split(',').filter(isCategory));
+  const breakdown = await getCategoryBreakdown(db, period);
+
+  return breakdown.categories
+    .filter((entry) => wanted.has(entry.category))
+    .map((entry) => ({
+      category: entry.category,
+      totalCents: entry.totalCents,
+      itemCount: entry.itemCount,
+    }));
+}
 
 export default function BreakdownScreen() {
   const { dimension, key, label, from, to, currency } = useLocalSearchParams<
@@ -83,7 +132,9 @@ export default function BreakdownScreen() {
             ? // An empty parameter is how a NULL merchant_norm survives the
               // round trip through the URL — it cannot carry null itself.
               { kind: 'bills', rows: await getMerchantBills(db, period, key === '' ? null : key) }
-            : { kind: 'unitemised', rows: await getUnitemisedBills(db, period) };
+            : dimension === 'categories'
+              ? { kind: 'categories', rows: await foldedCategories(db, period, key) }
+              : { kind: 'unitemised', rows: await getUnitemisedBills(db, period) };
 
       if (!cancelled) setData(loaded);
     })();
@@ -94,6 +145,16 @@ export default function BreakdownScreen() {
   }, [dimension, key, from, to]);
 
   const openBill = useCallback((billId: number) => router.push(`/bill/${billId}`), []);
+
+  /** One of the folded categories, on this same screen a level down. */
+  const openCategory = useCallback(
+    (category: Category, categoryLabel: string) =>
+      router.push({
+        pathname: '/insights/breakdown',
+        params: { dimension: 'category', key: category, label: categoryLabel, from, to, currency },
+      }),
+    [from, to, currency]
+  );
 
   if (!data) {
     return (
@@ -108,7 +169,7 @@ export default function BreakdownScreen() {
   const total =
     data.kind === 'category'
       ? data.rows.reduce((sum, row) => sum + (row.priceCents ?? 0), 0)
-      : data.kind === 'bills'
+      : data.kind === 'bills' || data.kind === 'categories'
         ? data.rows.reduce((sum, row) => sum + row.totalCents, 0)
         : data.rows.reduce((sum, row) => sum + row.remainderCents, 0);
 
@@ -140,6 +201,13 @@ export default function BreakdownScreen() {
           </ThemedText>
         )}
 
+        {data.kind === 'categories' && (
+          <ThemedText type="small" themeColor="textSecondary">
+            The categories the chart grouped together, because a donut stops being readable past
+            about six wedges. Tap one for its items.
+          </ThemedText>
+        )}
+
         <View style={styles.rows}>
           {data.kind === 'category' &&
             data.rows.map((row, index) => (
@@ -167,6 +235,17 @@ export default function BreakdownScreen() {
               />
             ))}
 
+          {data.kind === 'categories' &&
+            data.rows.map((row) => (
+              <Row
+                key={row.category}
+                onPress={() => openCategory(row.category, CATEGORY_LABELS[row.category])}
+                title={CATEGORY_LABELS[row.category]}
+                subtitle={`${row.itemCount} item${row.itemCount === 1 ? '' : 's'}`}
+                amount={formatMoney(row.totalCents, currency)}
+              />
+            ))}
+
           {data.kind === 'unitemised' &&
             data.rows.map((row) => (
               <Row
@@ -189,8 +268,9 @@ export default function BreakdownScreen() {
 
 function countLabel(data: Rows): string {
   const n = data.rows.length;
-  const noun = data.kind === 'category' ? 'item' : 'bill';
-  return `${n} ${noun}${n === 1 ? '' : 's'}`;
+  const noun = data.kind === 'category' ? 'item' : data.kind === 'categories' ? 'category' : 'bill';
+  const plural = data.kind === 'categories' ? 'categories' : `${noun}s`;
+  return `${n} ${n === 1 ? noun : plural}`;
 }
 
 function Row({
