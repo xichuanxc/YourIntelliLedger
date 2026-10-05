@@ -9,6 +9,7 @@
 
 import {
   clearAskKey,
+  clearByokKey,
   getAskKey,
   getByokKey,
   hasOwnAskKey,
@@ -56,13 +57,18 @@ describe('the Ask key', () => {
     expect(await hasOwnAskKey()).toBe(false);
   });
 
-  it('treats a blank entry as clearing, not as a key', async () => {
+  /**
+   * A blank box used to clear the separate key and hand Ask back to the
+   * receipt key. It no longer does: the field says leaving it blank keeps
+   * what is there, and the switch above it is how Ask is handed back.
+   */
+  it('keeps its own key when the box is left blank', async () => {
     await setByokKey('google-key');
     await setAskKey('deepseek-key');
     await setAskKey('   ');
 
-    expect(await hasOwnAskKey()).toBe(false);
-    expect(await getAskKey()).toBe('google-key');
+    expect(await hasOwnAskKey()).toBe(true);
+    expect(await getAskKey()).toBe('deepseek-key');
   });
 
   it('has nothing to offer when neither is set', async () => {
@@ -72,5 +78,49 @@ describe('the Ask key', () => {
   it('trims, because a pasted key often arrives with whitespace', async () => {
     await setAskKey('  deepseek-key\n');
     expect(await getAskKey()).toBe('deepseek-key');
+  });
+});
+
+/**
+ * Saving an empty box.
+ *
+ * The field says "leave blank to keep the current key", and this used to
+ * clear the keystore instead: the one gesture meant to change nothing took
+ * the key away, and the next receipt could not be read. Removing a key has
+ * its own button.
+ */
+describe('an empty key', () => {
+  it('leaves the receipt key where it was', async () => {
+    await setByokKey('AIzaREALkey');
+
+    await setByokKey('');
+
+    expect(await getByokKey()).toBe('AIzaREALkey');
+  });
+
+  it('is not fooled by a box holding only spaces', async () => {
+    await setByokKey('AIzaREALkey');
+
+    await setByokKey('   ');
+
+    expect(await getByokKey()).toBe('AIzaREALkey');
+  });
+
+  it('leaves the Ask key where it was', async () => {
+    await setAskKey('sk-ASKkey');
+
+    await setAskKey('');
+
+    expect(await hasOwnAskKey()).toBe(true);
+    expect(await getAskKey()).toBe('sk-ASKkey');
+  });
+
+  /** Clearing still works — it just has to be asked for. */
+  it('still clears when clearing is what was asked for', async () => {
+    await setByokKey('AIzaREALkey');
+
+    await clearByokKey();
+
+    expect(await getByokKey()).toBeNull();
   });
 });

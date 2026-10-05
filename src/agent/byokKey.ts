@@ -22,12 +22,18 @@ export async function getByokKey(): Promise<string | null> {
   return SecureStore.getItemAsync(KEY);
 }
 
+/**
+ * Stores a key, and does nothing at all when handed an empty one.
+ *
+ * Emptiness is not an instruction here. The field it comes from says "leave
+ * blank to keep the current key", and it used to do the opposite: saving with
+ * an empty box called this, which cleared the keystore, so the one gesture
+ * that was supposed to change nothing silently took the key away. Removing a
+ * key has its own button; this function only sets.
+ */
 export async function setByokKey(key: string): Promise<void> {
   const trimmed = key.trim();
-  if (trimmed === '') {
-    await clearByokKey();
-    return;
-  }
+  if (trimmed === '') return;
   await SecureStore.setItemAsync(KEY, trimmed);
 }
 
@@ -58,12 +64,10 @@ export async function hasOwnAskKey(): Promise<boolean> {
   return (await SecureStore.getItemAsync(ASK_KEY)) !== null;
 }
 
+/** Empty means "unchanged", as it does for the receipt key. */
 export async function setAskKey(key: string): Promise<void> {
   const trimmed = key.trim();
-  if (trimmed === '') {
-    await clearAskKey();
-    return;
-  }
+  if (trimmed === '') return;
   await SecureStore.setItemAsync(ASK_KEY, trimmed);
 }
 
